@@ -82,11 +82,32 @@ stop.bat
 - 后端：`http://localhost:5000`
 - 健康检查：`http://localhost:5000/api/health`
 
+### 4. 常用开发命令
+
+```powershell
+# 单独启动后端
+cd .\backend
+& ..\.venv\Scripts\python.exe .\run.py
+
+# 单独启动前端
+cd .\frontend
+npm run dev
+
+# 运行后端测试
+& .\.venv\Scripts\python.exe -m unittest discover -s .\backend\tests -p "test_*.py"
+
+# 前端构建验证
+cd .\frontend
+npm run build
+```
+
 ## 模块入口
 
 - 文献管理：侧边栏 `Workspace`
 - 采集中心：侧边栏 `Collection`
 - 视频转笔记：侧边栏 `Media`
+
+视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`）、已配置的 Gemini Key，以及可访问 Gemini API 或已在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
 
 视频转笔记模块的任务产物会保存到：
 
@@ -97,12 +118,12 @@ stop.bat
 
 ## 文档入口
 
-- 项目总览：[`docs/project-overview.md`](docs/project-overview.md)
-- 开发指南：[`docs/development-guide.md`](docs/development-guide.md)
-- 路线图：[`docs/roadmap.md`](docs/roadmap.md)
-- 项目日志：[`docs/project-log.md`](docs/project-log.md)
+- 当前架构：[`docs/current-architecture.md`](docs/current-architecture.md)
+- 目标实现规范：[`docs/specifications/target-implementation-spec.md`](docs/specifications/target-implementation-spec.md)
+- 决策记录：[`docs/decisions/project-decisions.md`](docs/decisions/project-decisions.md)
+- 工程经验：[`docs/lessons/engineering-lessons.md`](docs/lessons/engineering-lessons.md)
 - 文档导航：[`docs/documentation-map.md`](docs/documentation-map.md)
-- 历史方案与实施文档：[`docs/plans/`](docs/plans/)
+- 设计与实施计划：[`docs/plans/`](docs/plans/)
 
 ## 开发约定
 

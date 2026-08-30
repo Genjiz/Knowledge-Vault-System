@@ -1,36 +1,36 @@
 # Documentation Map
 
-这个文件是项目文档导航，也是 Agent 重启会话后最快的上下文入口。
+这个文件是项目文档导航，也是 Agent 重启会话后最快的上下文入口。文档职责的权威定义见根目录 `AGENTS.md` 第 6.1 节。
 
 ## 建议阅读顺序
 
 1. `README.md`
    作用：对外简介、快速启动、仓库定位
-2. `docs/project-overview.md`
-   作用：项目目标、当前范围、架构与目录
-3. `docs/development-guide.md`
-   作用：环境、启动、测试、配置、运行细节
-4. `docs/roadmap.md`
-   作用：产品方向与后续扩展重点
-5. `docs/project-log.md`
-   作用：重要变更、关键决策、阶段里程碑
+2. `docs/current-architecture.md`
+   作用：已实现并验证的当前架构、数据与产物位置、当前限制
+3. `docs/specifications/target-implementation-spec.md`
+   作用：用户已确认的目标态（近期目标、中期方向、负面约束）
+4. `docs/decisions/project-decisions.md`
+   作用：长期有效的重要决策及理由
+5. `docs/lessons/engineering-lessons.md`
+   作用：已验证、可复用的工程经验
 6. `docs/plans/`
-   作用：历史设计文档、实施计划、专题方案
+   作用：设计与实施计划（`YYYY-MM-DD-<topic>.md`）
 
 ## 各文档怎么更新
 
 - `README.md`
   更新时机：对外定位、启动方式、核心能力发生变化时
-- `docs/project-overview.md`
-  更新时机：项目结构、架构边界、核心模块发生变化时
-- `docs/development-guide.md`
-  更新时机：环境要求、脚本、命令、配置方式发生变化时
-- `docs/roadmap.md`
-  更新时机：产品方向、阶段目标、优先级发生变化时
-- `docs/project-log.md`
-  更新时机：完成重要改造、做出关键决策、进入新阶段时
+- `docs/current-architecture.md`
+  更新时机：已实现的结构、数据流、路径规则、限制发生变化时；只写已验证事实
+- `docs/specifications/target-implementation-spec.md`
+  更新时机：用户确认新的目标态或推翻既有目标态时
+- `docs/decisions/project-decisions.md`
+  更新时机：形成新的长期决策时（编号递增）
+- `docs/lessons/engineering-lessons.md`
+  更新时机：出现已验证、可能复用的工程经验时
 - `docs/plans/`
-  更新时机：开始重要任务前新增方案文档，或补充历史设计说明时
+  更新时机：开始复杂任务前新增计划文档，执行中同步更新进度
 
 ## 当前真实结构
 
@@ -39,6 +39,10 @@
 ├─ backend/
 ├─ frontend/
 ├─ docs/
+│  ├─ specifications/
+│  ├─ decisions/
+│  ├─ lessons/
+│  └─ plans/
 ├─ start.bat
 ├─ stop.bat
 ├─ README.md
@@ -48,5 +52,4 @@
 ## 说明
 
 - 仓库根目录就是项目根目录
-- 旧的顶层说明文档已经拆分进 `docs/`
-- 如果历史计划中出现旧目录结构，以本文件和 `docs/project-overview.md` 为准
+- 如果历史计划中出现旧目录结构或旧文档名，以本文件和 `AGENTS.md` 为准

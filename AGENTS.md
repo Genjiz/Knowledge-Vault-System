@@ -1,49 +1,186 @@
 # AGENTS.md
 
-## Project Identity
+## 0. 项目特定配置
 
-- Public project name: `Knowledge Vault`
-- Suggested GitHub repository slug: `knowledge-vault`
-- This repository root is the only project root. Do not reintroduce a nested application root such as `literature-manager/`.
+- 操作系统：Windows
+- 项目根目录：仓库根目录（含 `backend/`、`frontend/`、`docs/`）
+- 后端 Python 环境：仓库根目录 `.venv`，解释器为 `.venv\Scripts\python.exe`，不使用 conda
+- 前端环境：Node.js 18+，依赖位于 `frontend/node_modules`
+- 默认端口：后端 `5000`，前端 `3000`
+- 仓库托管于 GitHub 私有仓库，依赖目录与运行数据随仓库提交，便于跨机器直接使用
+- Gemini Key 读取优先级：环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → 根目录 `gemini_api_key.txt`
+- 本机浏览器为 Edge（Chromium 内核）；DrissionPage 默认按 Chrome 路径查找浏览器，需要指定浏览器路径时先与用户确认
+- 视频转笔记模块依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg）；该模块计划改为项目内部依赖，调整前先与用户确认方案
 
-## Read This First
+## 1. 协作与确认约定（强制）
 
-When starting a new task, read documents in this order as needed:
+- 对项目的任何改动（代码、文档、目录结构、依赖、配置）必须先向用户说明方案并获得确认，再执行。
+- 只读类工作（分析、检索、解释、统计）无需确认，可直接进行。
+- 复杂、多步骤或跨会话的任务，先把实施计划写入 `docs/plans/`，经用户确认后按计划执行。
+- 用户未确认的设想、临时方案不得写成稳定事实，也不得提前实施。
 
-1. `docs/documentation-map.md`
-2. `docs/project-overview.md`
-3. `docs/development-guide.md`
-4. `docs/roadmap.md`
-5. `docs/project-log.md`
+## 2. 环境与命令约束（强制）
 
-Use `docs/plans/` for historical designs and implementation plans when the current task touches older areas of the system.
+- 所有命令默认以仓库根目录为工作目录；不得假定当前工作目录正确。
+- 运行后端 Python 时必须显式使用 `.venv\Scripts\python.exe`，不得调用归属不明的全局 `python`/`pip`。
+- 前端命令在 `frontend/` 目录下执行（`npm run dev` / `npm run build`）。
+- 默认前台同步运行命令，以获取完整输出和退出码；仅长任务（安装、构建）允许后台运行，且完成后必须核对退出码与输出，不得仅凭"进程在运行"判断成功。
+- 编码约定：
+  - 仓库内文本文件统一使用 UTF-8（无 BOM）；
+  - Python 读写文件显式指定 `encoding="utf-8"`；JSON 保留中文时使用 `ensure_ascii=False`；
+  - 出现乱码时先排查文件编码与读写编码，再判断是否为程序逻辑错误。
 
-## Documentation Rules
+## 3. 配置与密钥（强制）
 
-- Every code change must consider whether documentation also needs an update.
-- If a change affects project structure, setup, architecture, workflows, naming, or roadmap, update the relevant docs in the same session.
-- Record important project-level changes and decisions in `docs/project-log.md`.
-- Put new design or implementation plans in `docs/plans/YYYY-MM-DD-<topic>.md`.
-- Keep `README.md` public-facing and concise.
-- Keep operational and internal knowledge under `docs/`.
+- 本机真实配置保存在根目录 `.env`（已加入 `.gitignore`，不提交）。
+- 必须维护可提交的 `.env.example`，其变量结构必须与 `.env` 保持一致；新增、删除或重命名配置变量时同步更新 `.env.example`。
+- 项目缺少 `.env` 时，从 `.env.example` 复制创建，不得在代码中硬编码缺失配置。
+- 不得把真实 API Key、令牌或其他密钥写入代码、文档、命令、测试数据、fixture 或日志。
 
-## Repository Conventions
+## 4. 依赖管理（强制）
 
-- Top-level directories should remain focused: `backend/`, `frontend/`, `docs/`, and a small set of root project files.
-- Backend changes should follow the existing layered structure: `models`, `repositories`, `services`, `providers`, `routes`, `runtime`.
-- New product features should be integrated into the existing app architecture rather than introduced as separate standalone apps or script entry points.
-- The crawler domain stores raw results first, then runs translation, analysis, and export steps on top of those records.
-- Independent modules can keep their own task models, routes, and artifact directories when they are conceptually separate from literature management. The `video_notes` domain follows this rule.
+- 环境独立可复现：项目环境不依赖系统公共 Python，Node.js 版本不随本机环境漂移；依赖全部收敛在项目内（`.venv`、`node_modules`）。
+- 后端依赖以 `backend/requirements.txt` 为唯一清单；新增、删除或升级依赖后必须同步更新该文件。
+- 安装命令必须通过项目环境执行：`.venv\Scripts\python.exe -m pip install ...`。
+- 依赖安装或升级完成后，必须执行相关导入验证或测试确认可用。
+- 前端依赖以 `frontend/package.json` 为唯一清单；改动后运行 `npm install` 并同步更新 `package-lock.json`。
+- 锁文件唯一：`package-lock.json` 是唯一的 Node.js 锁文件；发现 `yarn.lock`、`pnpm-lock.yaml` 等其他锁文件时先询问用户，不得擅自删除或重建。
+- `.venv/` 与 `frontend/node_modules/` 随仓库提交。`.venv` 内含本机绝对路径，跨机器失效时以 `requirements.txt` 重建；`node_modules` 异常时以 `npm install` 重建。
+- 不得未经用户确认引入新的包管理器或环境体系（如 conda、uv、poetry、pnpm、yarn）。
+- 不得提交再生成产物：`__pycache__/`、`*.pyc`、`frontend/dist/` 等。
 
-## Safety Rules
+## 5. 仓库结构与数据组织（强制）
 
-- Do not commit secrets, especially `backend/gemini_api_key.txt` or `gemini_api_key.txt`.
-- Do not commit local runtime data such as `.venv/`, `.crawler-browser-profile/`, `frontend/node_modules/`, or generated artifacts unless explicitly requested.
-- Avoid destructive git commands unless the user explicitly asks for them.
-- Preserve user changes that are already in the worktree.
+### 5.1 代码结构
 
-## Verification Expectations
+- 顶层目录保持聚焦：`backend/`、`frontend/`、`docs/`，以及少量根目录项目文件。
+- 仓库根目录是唯一项目根目录，不得引入嵌套子项目根目录。
+- 后端遵循分层结构：`models`、`repositories`、`services`、`providers`、`routes`、`runtime`；独立业务域按域分包（现有 `crawler`、`video_notes`），跨域公共设施放 `app/core/`。
+- 新功能集成到现有应用架构中，不引入独立 standalone 应用或脚本入口。
+- `crawler/legacy/` 是历史爬虫脚本的隔离区，通过 provider 包装逐步吸收，不得在其中新增正式功能。
 
-- For backend runtime/path changes, run focused Python tests first.
-- For frontend-affecting changes, run `npm run build` before closing the task when feasible.
-- If verification cannot be run, say so explicitly in the final handoff.
+### 5.2 数据与产物
+
+- 代码、数据、临时产物分离：
+  - 正式运行数据（数据库、上传文件、任务产物）集中在统一的运行数据目录中，随仓库提交；
+  - 临时验证、调试脚本、可丢弃日志写入 `tmp/`（不提交），不得混入正式数据目录；
+  - 任务产物按 `<域>/<任务id>/` 自包含组织，产物路径统一从 paths 模块读取，禁止在业务代码中硬编码数据目录字面量。
+- SQLite 数据库为二进制全量快照，按里程碑提交（功能节点、重要变更后），不做每次改动都提交；单文件接近 GitHub 100MB 硬限制时，与用户商量归档或拆分策略。
+- 采集域数据流：先落原始结果（raw_issue/raw_paper），再执行翻译、分析和导出。
+- 汇总、统计、清理类脚本默认只处理正式数据，不扫描 `tmp/`，除非明确要求。
+
+## 6. 文档体系与维护（强制）
+
+### 6.1 文档清单与职责
+
+| 文档 | 职责 |
+|---|---|
+| `README.md` | 项目入口与快速上手：简介、环境搭建、常用命令、Key 配置、模块入口；保持精炼、面向公众 |
+| `docs/documentation-map.md` | 文档导航：说明不同任务应读哪些文档 |
+| `docs/current-architecture.md` | 当前已实现架构：分层、模块职责、端到端数据流、配置字段、运行产物、路径规则、当前限制；只记录已实现并验证的事实 |
+| `docs/specifications/target-implementation-spec.md` | 目标实现规范：用户已确认的长期目标态（目标架构、目标数据契约、能力规划） |
+| `docs/decisions/project-decisions.md` | 决策记录：长期有效的重要决策，含稳定编号、状态、日期、内容、理由、影响 |
+| `docs/lessons/engineering-lessons.md` | 工程经验：已验证、可复用的经验教训 |
+| `docs/plans/` | 设计与实施计划：`YYYY-MM-DD-<topic>.md` |
+
+- 上述文档不存在时，不得将缺失视为错误，也不得无依据一次性补齐全部文档。
+- 新增 README 或长期主题文档前，必须向用户说明原因并获得确认。
+
+### 6.2 任务开始时的文档读取
+
+- 开始任务时先读 `docs/documentation-map.md`，再按需读其他文档；只读与当前任务直接相关的部分。
+- 修改代码结构、运行流程、配置或数据契约时，必须读 `docs/current-architecture.md`（如已建立）。
+- 涉及目标态、规划或架构方向时，读 `docs/specifications/target-implementation-spec.md`（如已建立）。
+- 涉及已有长期设计决策时，读 `docs/decisions/project-decisions.md`；遇到可能重复出现的工程问题时，读 `docs/lessons/engineering-lessons.md`。
+- 涉及历史遗留区域时，查阅 `docs/plans/` 中的相关历史方案。
+- 执行已有任务计划时，必须读取对应计划文件。
+
+### 6.3 任务计划规范
+
+- 复杂、多步骤或跨会话任务必须在 `docs/plans/YYYY-MM-DD-<topic>.md` 创建计划，至少包含：
+  1. 目标与范围；
+  2. 已确认决策与约束；
+  3. 实施步骤；
+  4. 当前进度；
+  5. 计划偏差；
+  6. 验证结果；
+  7. 遗留问题。
+- 执行中在同一文件更新进度、偏差、验证与遗留问题；计划发生实质变化时先更新计划再继续执行。
+- 同一任务只维护一份主文档。
+
+### 6.4 改动后的文档更新
+
+每次改动后评估并更新受影响文档：
+
+- 结构、安装配置、架构、工作流、命名变化：同会话内更新对应文档。
+- 快速上手、环境、命令、入口变化：更新 `README.md`。
+- 已实现架构、数据流、路径规则、限制变化：更新 `docs/current-architecture.md`。
+- 用户确认的目标态变化：更新 `docs/specifications/target-implementation-spec.md`。
+- 形成长期决策：更新 `docs/decisions/project-decisions.md`；形成可复用工程经验：更新 `docs/lessons/engineering-lessons.md`。
+- 文档导航变化：更新 `docs/documentation-map.md`。
+
+### 6.5 提炼闭环与写入可信度
+
+- 任务完成后，把长期有效信息提炼到对应正式文档；已提炼完毕的普通计划文档从 `docs/plans/` 删除或按用户确认归档，不以"以后可能有用"为由留存流水。
+- 只有经过代码检查或运行验证的事实才能写入 `docs/current-architecture.md`；只有用户明确确认的目标态才能写入 `docs/specifications/target-implementation-spec.md`。
+- 猜测、讨论中的备选方案、未实施计划不得写成稳定事实；需要保留时明确标注状态与依据边界。
+
+## 7. 开发流程与测试（强制）
+
+### 7.1 TDD
+
+- 新增功能、缺陷修复、重构和行为变化，遵循 `Red → Green → Refactor`：
+  1. 先编写能够正确失败的测试；
+  2. 运行并确认因目标功能缺失而失败；
+  3. 编写使测试通过的最小实现；
+  4. 运行受影响测试并确认通过；
+  5. 在测试保持通过的前提下重构。
+- 修复缺陷前，先编写能稳定复现缺陷的回归测试。
+- 代码新增或变更后，同步维护对应测试。
+- 仅改 Markdown、注释或静态配置时，不要求构造失败测试，但需做与文件类型匹配的格式或语法验证。
+
+### 7.2 外部服务调用测试
+
+- 涉及 Gemini API、真实网页采集、浏览器自动化等外部服务时，不要求每次测试发起真实调用。
+- Prompt 组装、参数构造、配置加载与校验、响应解析、后处理等可纯化逻辑必须离线单元测试。
+- 外部调用控制流使用 mock、stub、离线响应样例覆盖；重试、超时、异常、空结果、限流等边界情况尽可能离线覆盖。
+- 测试与 fixture 中只能使用虚假或脱敏的 API Key。
+
+### 7.3 完成前验证
+
+- 宣称任务完成前，必须运行本次变更直接相关的测试；受影响的已有测试必须通过。
+- 后端运行时/路径相关改动，先运行相关 Python 测试；影响前端的改动，收尾前运行 `npm run build`。
+- 必须核对测试命令的退出码、标准输出和标准错误，不得只凭部分日志判断通过。
+- 无法运行验证时，必须在交付说明中明确原因、未覆盖范围、风险与补测要求；否则不得宣称任务完成或问题已修复。
+
+## 8. 安全规则（强制）
+
+- 密钥类文件不提交：`.env`、`backend/gemini_api_key.txt`、`gemini_api_key.txt`，以及未来任何含密钥的文件，无论仓库可见性如何。
+- 仓库为私有仓库；`.crawler-browser-profile/`（浏览器会话数据，含本机登录态）不提交。
+- 上传内容涉及第三方版权材料（采集的期刊论文、翻译）时，仅限私有仓库，转为公开前必须与用户确认。
+- 避免破坏性 git 命令，除非用户明确要求。
+- 保留工作区中用户已有的改动。
+
+## 9. 注释规范（强制）
+
+- 新增代码注释和解释性 docstring 统一使用中文。
+- 修改代码时评估相关注释是否需要新增、更新或删除；注释过期必须同步处理。
+- 对不直观的意图、阶段边界、非显然约束、兼容与错误恢复逻辑，注释应说明设计原因，不复述代码行为；不为显而易见的代码添加逐行注释。
+- 不为统一语言而批量翻译与本次改动无关的历史英文注释。
+
+## 10. 本文档的维护（强制）
+
+- 本文档只收录对所有后续任务长期生效的行为约束；一次性任务要求、过程性信息（迁移记录、确认记录、变更日志、待办）不得写入。
+- 出现下列情形时，评估是否需要更新本文档，并与用户确认后修改：
+  1. 环境或工具链变化（Python/Node 版本要求、包管理器、运行端口）；
+  2. 仓库结构、分层或数据目录约定变化；
+  3. 版本控制策略变化（提交范围、仓库可见性）；
+  4. 文档体系或工作流变化（TDD、验证、协作确认流程）；
+  5. 现有规则被实践证明不适配，需要修订或废除。
+- 修改本文档必须先向用户说明改动点并获得确认，未经确认不得修改。
+- 修改时保持全文干净、客观、清晰：
+  - 只写规则与事实，不写讨论过程、备选方案和理由阐述（理由属于 `docs/decisions/project-decisions.md`）；
+  - 不使用"暂时""待定""用户已确认"等过程性表述；
+  - 保持既有章节结构与编号稳定，新内容归入最贴近的章节；
+  - 收录新规则前，先检查是否已有其他文档更适合承接（目标态 → target-spec，决策理由 → decisions，经验 → lessons），避免本文档膨胀。
+- 本文档与实际执行的约定不一致时，以实际确认的约定为准，并按上述流程尽快修正本文档。
