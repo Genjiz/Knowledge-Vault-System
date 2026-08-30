@@ -27,14 +27,21 @@ class VideoNoteRuntimeTestCase(unittest.TestCase):
         self.assertIn("BV1qdXoBdEYy", title)
         self.assertIn("https://www.bilibili.com/video/BV1qdXoBdEYy/", title)
 
-    def test_task_paths_live_under_backend_artifacts(self):
-        paths = build_task_paths(project_root=Path("C:/demo"), task_id=12)
+    def test_task_paths_live_under_data_artifacts(self):
+        import os
 
-        self.assertEqual(paths["task_root"], Path("C:/demo/backend/artifacts/video-notes/12"))
-        self.assertEqual(paths["audio"], Path("C:/demo/backend/artifacts/video-notes/12/source/video.wav"))
-        self.assertEqual(paths["transcript"], Path("C:/demo/backend/artifacts/video-notes/12/transcript/video.srt"))
-        self.assertEqual(paths["note"], Path("C:/demo/backend/artifacts/video-notes/12/notes/final-note.md"))
-        self.assertEqual(paths["metadata"], Path("C:/demo/backend/artifacts/video-notes/12/metadata.json"))
+        os.environ["DATA_ROOT"] = "C:/demo-data"
+        try:
+            paths = build_task_paths(task_id=12)
+
+            base = Path("C:/demo-data/artifacts/video-notes/12")
+            self.assertEqual(paths["task_root"], base)
+            self.assertEqual(paths["audio"], base / "source" / "video.wav")
+            self.assertEqual(paths["transcript"], base / "transcript" / "video.srt")
+            self.assertEqual(paths["note"], base / "notes" / "final-note.md")
+            self.assertEqual(paths["metadata"], base / "metadata.json")
+        finally:
+            os.environ.pop("DATA_ROOT", None)
 
 
 if __name__ == "__main__":

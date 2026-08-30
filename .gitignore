@@ -5,20 +5,21 @@
 **/*.pyc
 **/*.pyo
 
-.venv/
 .tmp/
 .pip-cache/
 .crawler-browser-profile/
 
-frontend/node_modules/
+# 依赖目录与运行数据按用户确认随私有仓库提交（.venv、frontend/node_modules、backend/data/）
+# .venv 与 node_modules 的实际首次入库将在用户确认后单独执行（大提交）
+
 frontend/dist/
 
-backend/app.db
+# 密钥类文件绝对不提交
 .env
 backend/.env
 backend/gemini_api_key.txt
 gemini_api_key.txt
-backend/uploads/pdfs/
-backend/artifacts/*
-!backend/artifacts/.gitkeep
+
+# 测试临时目录
 backend/.tmp-tests/
+tmp/

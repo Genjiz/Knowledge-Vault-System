@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import sys
 import unittest
@@ -19,7 +20,8 @@ class VideoNoteExecutionServiceTestCase(unittest.TestCase):
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)
-        self.app.config["VIDEO_NOTE_PROJECT_ROOT"] = str(self.temp_root)
+        self._original_data_root = os.environ.get("DATA_ROOT")
+        os.environ["DATA_ROOT"] = str(self.temp_root)
         self.ctx = self.app.app_context()
         self.ctx.push()
         db.create_all()
@@ -29,6 +31,10 @@ class VideoNoteExecutionServiceTestCase(unittest.TestCase):
         db.drop_all()
         db.engine.dispose()
         self.ctx.pop()
+        if self._original_data_root is None:
+            os.environ.pop("DATA_ROOT", None)
+        else:
+            os.environ["DATA_ROOT"] = self._original_data_root
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
 

@@ -1,3 +1,4 @@
+import os
 import shutil
 import sys
 import unittest
@@ -18,7 +19,8 @@ class VideoNoteApiTestCase(unittest.TestCase):
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)
-        self.app.config["VIDEO_NOTE_PROJECT_ROOT"] = str(self.temp_root)
+        self._original_data_root = os.environ.get("DATA_ROOT")
+        os.environ["DATA_ROOT"] = str(self.temp_root)
         self.app.config["VIDEO_NOTE_TASK_EXECUTOR"] = lambda task_id: None
         self.ctx = self.app.app_context()
         self.ctx.push()
@@ -30,6 +32,10 @@ class VideoNoteApiTestCase(unittest.TestCase):
         db.drop_all()
         db.engine.dispose()
         self.ctx.pop()
+        if self._original_data_root is None:
+            os.environ.pop("DATA_ROOT", None)
+        else:
+            os.environ["DATA_ROOT"] = self._original_data_root
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
 
@@ -74,8 +80,8 @@ class VideoNoteApiTestCase(unittest.TestCase):
     def test_detail_returns_transcript_and_note_preview_when_files_exist(self):
         from app.video_notes.repositories.task_repo import TaskRepository
 
-        transcript_path = self.temp_root / "backend" / "artifacts" / "video-notes" / "1" / "transcript" / "video.srt"
-        note_path = self.temp_root / "backend" / "artifacts" / "video-notes" / "1" / "notes" / "final-note.md"
+        transcript_path = self.temp_root / "artifacts" / "video-notes" / "1" / "transcript" / "video.srt"
+        note_path = self.temp_root / "artifacts" / "video-notes" / "1" / "notes" / "final-note.md"
         transcript_path.parent.mkdir(parents=True, exist_ok=True)
         note_path.parent.mkdir(parents=True, exist_ok=True)
         transcript_path.write_text("1\n00:00:00,000 --> 00:00:01,000\n测试字幕\n", encoding="utf-8")

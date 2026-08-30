@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from app.core.paths import video_note_task_root
 
-def build_task_paths(project_root, task_id):
-    task_root = Path(project_root) / "backend" / "artifacts" / "video-notes" / str(task_id)
+
+def build_task_paths(task_id):
+    task_root = video_note_task_root(task_id)
     return {
         "task_root": task_root,
         "source_dir": task_root / "source",

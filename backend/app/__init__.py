@@ -14,9 +14,7 @@ def create_app(config_name=None):
     db.init_app(app)
     cors.init_app(app)
     
-    upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads/pdfs')
-    if not os.path.isabs(upload_folder):
-        upload_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), upload_folder)
+    upload_folder = app.config.get('UPLOAD_FOLDER')
     os.makedirs(upload_folder, exist_ok=True)
     app.config['UPLOAD_FOLDER'] = upload_folder
     
