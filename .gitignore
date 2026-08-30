@@ -23,3 +23,6 @@ gemini_api_key.txt
 # 测试临时目录
 backend/.tmp-tests/
 tmp/
+
+# WorkBuddy 本地数据
+.workbuddy/
