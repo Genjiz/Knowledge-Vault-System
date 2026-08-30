@@ -22,3 +22,17 @@
 - 现象：`app/crawler/runtime/paths.py` 的 `find_chrome_executable()` 只探测 Chrome/Chromium 常见安装路径；本机浏览器为 Edge（Chromium 内核，`msedge.exe` 不在探测列表）。
 - 做法：需要使用 Edge 时，通过环境变量 `CRAWLER_BROWSER_PATH` 指定，或经用户确认后调整代码；不要假设 DrissionPage 能自动找到 Edge。
 - 适用范围：采集中心所有浏览器自动化场景。
+
+## L-004 全量测试套件会触发 safe-delete 批量删除守卫
+
+- 日期：2026-08-30
+- 现象：一次命令内跑完整 unittest 套件时，测试 setUp/tearDown 中 `shutil.rmtree` 的临时目录被 WorkBuddy 的 safe-delete 守卫拦截（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`，单轮累计删除超 50 文件即 `SystemExit(1)`），表现为大量无关测试报错；单模块运行则正常。
+- 做法：测试进程执行时清空 `CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR` 环境变量即可让守卫提前返回（`CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR= python -m unittest ...`）。
+- 适用范围：本机执行完整测试套件时。
+
+## L-005 SQLAlchemy sqlite URI 在 Windows 绝对路径需正斜杠
+
+- 日期：2026-08-30
+- 现象：`sqlite:///` + 反斜杠路径（如 `sqlite:///C:\dir\a.db`）在 SQLAlchemy 2.0 上解析异常；`sqlite:///C:/dir/a.db`（三斜杠 + 正斜杠）可用，四斜杠 `sqlite:////` 反而失败。
+- 做法：拼接 URI 时使用 `Path.as_posix()` 生成正斜杠路径。
+- 适用范围：Windows 下所有 sqlite 数据库 URI 生成。

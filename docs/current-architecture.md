@@ -27,10 +27,12 @@
 
 ## 数据与产物
 
-- 主数据库：`backend/app.db`（SQLite）
-- 上传文件：`backend/uploads/pdfs/`
-- 采集产物：`backend/artifacts/raw-json/`
-- 视频转笔记产物：`backend/artifacts/video-notes/<task_id>/`（路径由 `app/video_notes/runtime/paths.py` 定义）
+运行数据统一位于 `backend/data/`（路径由 `app/core/paths.py` 唯一定义，可用环境变量 `DATA_ROOT` 整体重定向）：
+
+- 主数据库：`backend/data/db/app.db`（SQLite）
+- 上传文件：`backend/data/uploads/pdfs/`
+- 采集产物：`backend/data/artifacts/crawler/raw-json/`（`ARTIFACT_ROOT`）
+- 视频转笔记产物：`backend/data/artifacts/video-notes/<task_id>/`
 
 采集核心表：`crawl_task`、`crawl_task_log`、`raw_issue`、`raw_paper`、`raw_issue_analysis`、`llm_run`。
 
@@ -38,6 +40,7 @@
 
 ## 运行时路径规则
 
+- 运行数据目录统一由 `app/core/paths.py` 定义（`DATA_ROOT` 环境变量可整体重定向）；各目录保留独立环境变量覆盖（`DATABASE_URL`、`ARTIFACT_ROOT`、`UPLOAD_FOLDER`）。
 - 运行时路径工具从代码位置向上查找同时包含 `backend/` 和 `frontend/` 的目录作为工作区根（`app/crawler/runtime/paths.py`）
 - 浏览器 profile 目录：`.crawler-browser-profile/`（可用环境变量 `CRAWLER_BROWSER_DATA_ROOT` 覆盖）
 - 采集历史脚本位于 `backend/app/crawler/legacy/`，由 provider 动态加载包装
@@ -45,8 +48,8 @@
 
 ## 当前限制
 
-- 文献域按层平铺、采集与视频域按域分包，两种组织方式并存，新域归属需人为判断
-- 运行数据分散在多处（app.db、uploads、artifacts），且视频域产物路径存在硬编码
-- 数据库结构演进依赖 `db.create_all()`，无迁移工具
-- 视频转笔记后台任务使用裸 `threading.Thread`，无统一任务执行器
+- 文献域按层平铺、采集与视频域按域分包，两种组织方式并存（待 PC 阶段重构统一）
+- 数据库结构演进依赖 `db.create_all()`，无迁移工具（待 PB 阶段引入 Flask-Migrate）
+- 视频转笔记后台任务使用裸 `threading.Thread`，无统一任务执行器（待 PE 阶段）
 - 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
+- 采集数据与文献工作台数据尚未打通（待 PD 阶段）
