@@ -13,10 +13,11 @@ from app.extensions import db
 
 
 class VideoNoteModelTestCase(unittest.TestCase):
-    def test_create_app_creates_video_note_tables(self):
+    def test_factory_boots_and_models_create_video_note_tables(self):
         app = create_app("testing")
 
         with app.app_context():
+            db.create_all()
             table_names = {
                 row[0]
                 for row in db.session.execute(

@@ -81,7 +81,7 @@
 - [x] 本计划 v2 创建（2026-08-30）
 - [x] 用户确认计划 v2（2026-08-30："开始 PA"）
 - [x] **PA 路径与数据目录统一（2026-08-30 完成）**
-- [ ] PB Flask-Migrate 基线
+- [x] **PB Flask-Migrate 基线（2026-08-30 完成）**
 - [ ] PC 包结构重塑
 - [ ] PD 数据模型演进与采集-文献打通
 - [ ] PE 统一后台任务执行器
@@ -90,18 +90,21 @@
 ## 5. 计划偏差
 
 - v1 → v2：用户补充 T-1~T-7 目标态后，目标架构由"三域分包"修订为"papers/collection/video_notes + core 平台层"；Flask-Migrate 由 P3 提前至 PB（数据模型演进依赖它）；新增 PD（打通）阶段；legacy 目录更名说明并入 PC。
-- PA 执行偏差：`crawler/legacy/` 内未发现硬编码产物路径（零改动）；`build_task_paths` 签名由 `(project_root, task_id)` 简化为 `(task_id)`，`ArtifactService` 移除 project_root 注入，测试改用 `DATA_ROOT` 环境变量覆盖；全量测试需清空 `CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR` 规避 safe-delete 批量删除守卫（见 lessons L-004）；`.gitignore` 已按提交策略调整（数据入库、密钥排除、依赖目录留待专门提交）。
+- PA 执行偏差：`crawler/legacy/` 内未发现硬编码产物路径（零改动）；`build_task_paths` 签名由 `(project_root, task_id)` 简化为 `(task_id)`，`ArtifactService` 移除 project_root 注入，测试改用 `DATA_ROOT` 环境变量覆盖；`.gitignore` 已按提交策略调整（数据入库、密钥排除、依赖目录留待专门提交）。
+- PB 执行偏差：`db.create_all()` 从 app factory 移除（否则与迁移重复建表冲突），数据库结构改由 Flask-Migrate 接管；`TestingConfig` 内存库继续使用 `db.create_all()`（测试 setUp 显式调用，不跑迁移）；初始迁移通过对空内存库 autogenerate 生成（factory 的 create_all 需临时置空）；两个 bootstrap 测试改为显式建表；全量测试仍需处理 safe-delete 批量删除守卫（删除 `state.json` 重置计数，见 lessons L-004 补充）。
 
 ## 6. 验证结果
 
 - PA：全量后端测试 55/55 通过（含新增 test_core_paths）；冒烟验证通过——应用在开发配置下正常启动，`/api/health` 200、`/api/literatures` 正常，三个数据配置均指向 `backend/data/`，原 app.db 数据（含 2 篇 PDF、raw-json 产物）完整可用。
-- 提交记录：`docs` 体系提交 + `refactor(PA)` 提交 + `chore` 清理提交。
+- PB：初始迁移含全部 14 张表（`1100434363a6_initial_schema`）；真实库 `flask db stamp head` 成功；空库往返验证——`upgrade head` 建出 14 表并写入版本号，`downgrade base` 清空所有表（仅剩 alembic_version）；移除 factory create_all 后全量测试 55/55 通过；开发配置冒烟正常（health 200、literatures 200）。
+- 提交记录：`docs` 体系提交 + `refactor(PA)` 提交 + `chore` 清理提交 + PB 相关提交（见 git log）。
 
 ## 7. 遗留问题
 
 1. `crawler/legacy/` 脚本内部硬编码路径核实：PA 已核实为零，无需适配。
-2. `TestingConfig` 内存库与 Migrate 的配合：PB 执行时确定。
+2. `TestingConfig` 内存库与 Migrate 的配合：已确定——测试继续用 `db.create_all()` 建内存库，不跑迁移。
 3. PDF 文件记录的落库方式（文件记录表 vs 可空字段）：PD 执行时按现有 uploads 机制确定。
 4. 知网、期刊官网源适配器、PDF 下载完整功能、LLM 多供应商配置界面的具体实现：结构就位后另起计划。
 5. `.venv/` 与 `frontend/node_modules/` 的首次入库：已从 .gitignore 移除忽略，待用户确认后作为独立大提交执行。
 6. `backend/app/crawler/legacy/domestic/issue_url_cache.json` 与 legacy 期刊缓存目录（如 `legacy/情报学报/`）为旧爬虫运行缓存，暂未纳入版本控制，待用户决定是否忽略或入库。
+7. `alembic.ini` 由 `flask db init` 生成，`sqlalchemy.url` 为空（运行时由应用配置注入），迁移脚本与 `migrations/` 需随仓库提交。

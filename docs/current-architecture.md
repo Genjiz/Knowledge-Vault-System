@@ -23,7 +23,7 @@
 
 蓝图前缀：`/api/literatures`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/video-note-tasks`、`/api/health`。
 
-数据库建表方式为 `db.create_all()`，未引入迁移工具。
+数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。现有库已 stamp 初始基线 `1100434363a6`。
 
 ## 数据与产物
 
@@ -49,7 +49,6 @@
 ## 当前限制
 
 - 文献域按层平铺、采集与视频域按域分包，两种组织方式并存（待 PC 阶段重构统一）
-- 数据库结构演进依赖 `db.create_all()`，无迁移工具（待 PB 阶段引入 Flask-Migrate）
 - 视频转笔记后台任务使用裸 `threading.Thread`，无统一任务执行器（待 PE 阶段）
 - 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
 - 采集数据与文献工作台数据尚未打通（待 PD 阶段）

@@ -52,7 +52,19 @@ npm install
 cd ..
 ```
 
-### 2. 配置 Gemini Key
+### 2. 初始化数据库
+
+仓库随附 `backend/data/db/app.db`（含数据与迁移基线），可直接使用。全新环境（无数据库文件）时执行：
+
+```powershell
+cd .\backend
+& ..\.venv\Scripts\python.exe -m flask --app run.py db upgrade head
+cd ..
+```
+
+数据库结构变更统一通过 Flask-Migrate 管理（`flask db migrate` + `flask db upgrade`），不再依赖 `create_all()`。
+
+### 3. 配置 Gemini Key
 
 优先级如下：
 
@@ -69,7 +81,7 @@ GEMINI_PROXY_URL=http://127.0.0.1:7890
 
 也支持直接在 `.env` 中使用 `HTTPS_PROXY` 或 `HTTP_PROXY`。
 
-### 3. 启动与关闭
+### 4. 启动与关闭
 
 ```bat
 start.bat
@@ -82,7 +94,7 @@ stop.bat
 - 后端：`http://localhost:5000`
 - 健康检查：`http://localhost:5000/api/health`
 
-### 4. 常用开发命令
+### 5. 常用开发命令
 
 ```powershell
 # 单独启动后端
