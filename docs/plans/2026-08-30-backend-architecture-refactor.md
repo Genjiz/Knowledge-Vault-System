@@ -84,7 +84,7 @@
 - [x] **PB Flask-Migrate 基线（2026-08-30 完成）**
 - [x] **PC 包结构重塑（2026-08-31 完成）**
 - [x] **PD 数据模型演进与采集-文献打通（2026-08-31 完成）**
-- [ ] PE 统一后台任务执行器
+- [x] **PE 统一后台任务执行器（2026-08-31 完成）**
 - [ ] PF 测试归位与收尾
 
 ## 5. 计划偏差
@@ -94,6 +94,7 @@
 - PB 执行偏差：`db.create_all()` 从 app factory 移除（否则与迁移重复建表冲突），数据库结构改由 Flask-Migrate 接管；`TestingConfig` 内存库继续使用 `db.create_all()`（测试 setUp 显式调用，不跑迁移）；初始迁移通过对空内存库 autogenerate 生成（factory 的 create_all 需临时置空）；两个 bootstrap 测试改为显式建表；全量测试仍需处理 safe-delete 批量删除守卫（删除 `state.json` 重置计数，见 lessons L-004 补充）。
 - PC 执行偏差：papers 的 service 层深度抽取（路由业务逻辑下沉到 paper_service/ingest/organize）**推迟到 PD 阶段**——当前无 literature 路由测试作为安全网，纯结构阶段先保证行为不变；`papers/services/` 已建骨架。safe-delete 环境干扰的根本解法：测试临时目录从 `backend/.tmp-tests/` 迁至 OS 临时目录（shim 对 OS tmp 下的路径直通原生 rmtree，见 lessons L-004 再补充）。新增 `core/errors.py`（统一异常 + 全局错误处理器）、`core/llm/registry.py`（T-7 骨架）、`collection/sources/base.py`（SourceAdapter 接口，现有 NcpssdSource/ElsevierSource 尚未实现该接口，适配在 T-1 任务落地）。
 - PD 执行偏差：service 层抽取**仅完成核心的 paper_service**（落库/合并/期刊关联），tag/folder/note/backup 的抽取范围收敛到"打通所需"；重复期刊名接口返回 409（比 400 语义更准确）；PDF 落库沿用现有 `literature.pdf_path` 字段（无需新表，遗留问题 3 解决）；`db` 增加约束命名约定（D-011），因命名约定引入的无关 autogenerate 操作（tag 唯一约束）已从迁移中剔除；迁移首版因无名外键与 NOT NULL 无默认值两次失败，均修正后通过。
+- PE 执行偏差：`core/tasks.py` 实现为**线程包装 + 状态查询 + on_error 回调**（执行器不感知具体域，状态落库由回调完成）；video_notes 裸 Thread 已统一接入，失败回调标记任务 failed 并写日志；**crawler 经核实为同步执行**（请求内跑完，响应含 raw_issue），保持现状不接入异步——异步化会改变 API 契约并需要前端轮询配合，列为后续可选改造；失败路径集成测试因 `:memory:` SQLite 按线程隔离无法覆盖跨线程写库，改为同步调用失败回调的方式验证接线，线程异步行为由 core/tasks 单测覆盖（另在文件库上手动验证通过）。
 
 ## 6. 验证结果
 
@@ -101,7 +102,8 @@
 - PB：初始迁移含全部 14 张表（`1100434363a6_initial_schema`）；真实库 `flask db stamp head` 成功；空库往返验证——`upgrade head` 建出 14 表并写入版本号，`downgrade base` 清空所有表（仅剩 alembic_version）；移除 factory create_all 后全量测试 55/55 通过；开发配置冒烟正常（health 200、literatures 200）。
 - PC：全量后端测试 55/55 通过；8 个 API 端点冒烟全部正常（/api/notes 400 为原有必填参数行为）；旧包引用（app.crawler/utils/routes/models/repositories/extensions）全仓清零。
 - PD：新增 18 个测试（papers 模型/journal API/paper_merge 合并/期刊筛选），全量 73/73 通过；真实库迁移 `c9b826cfa1c0` 应用成功——16 张表，存量 2 条文献回填 `source=imported`，版本戳更新；回滚验证通过（downgrade 后 14 表、数据保留）；冒烟：/api/journals 增查改、/api/literatures?journal_id 过滤均正常。
-- 提交记录：`docs` 体系提交 + `refactor(PA)` + `chore` 清理 + `refactor(PB)` + `refactor(PC)` + PD 相关提交（见 git log）。
+- PE：新增 core/tasks 单测 5 个 + video_notes 失败路径测试 1 个，全量 78/78 通过；失败路径在文件库上手动验证（任务标记 failed、error_message 落库）；video_notes API 测试全绿。
+- 提交记录：`docs` 体系提交 + `refactor(PA)` + `chore` 清理 + `refactor(PB)` + `refactor(PC)` + `feat(PD)` + PE 相关提交（见 git log）。
 
 ## 7. 遗留问题
 

@@ -60,7 +60,11 @@
 
 - 文献工作台的 tag/folder/note/backup 业务逻辑仍在路由层（未下沉 service）
 - 期刊筛选后端能力已就位（`/api/literatures?journal_id=`），前端筛选 UI 未接
-- 视频转笔记后台任务使用裸 `threading.Thread`，无统一任务执行器（待 PE 阶段）
+- 采集任务为同步执行（请求内跑完）；如需异步化需改 API 契约并配合前端轮询（core/tasks 执行器已可用）
 - 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
 - 采集源尚未实现 SourceAdapter 接口（现有 NcpssdSource/ElsevierSource 保留原实现，适配待 T-1 任务）
 - PDF 采集（T-2）与采集源配置的前端界面未实现
+
+## 后台任务执行器
+
+`app/core/tasks.py` 提供统一 `TaskExecutor`（PE 阶段落地）：daemon 线程包装 + `submit(task_id, fn, on_error)` + `is_running/running_ids` 状态查询；异常经 `on_error(exc)` 回调由调用方落库。已接入：视频转笔记任务（提交时包装 app context，失败回调把任务标记为 failed 并写日志）。采集任务当前保持同步执行（见当前限制）。

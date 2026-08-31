@@ -52,6 +52,28 @@ class VideoNoteApiTestCase(unittest.TestCase):
         self.assertEqual(payload["status"], "pending")
         self.assertEqual(payload["bvid"], "BV1qdXoBdEYy")
 
+    def test_task_marked_failed_when_execution_raises(self):
+        from app.video_notes.routes.task import _mark_failed_in_app_context
+
+        app = self.app
+
+        def failing_executor(task_id):
+            _mark_failed_in_app_context(app, task_id, RuntimeError("boom"))
+
+        self.app.config["VIDEO_NOTE_TASK_EXECUTOR"] = failing_executor
+
+        response = self.client.post(
+            "/api/video-note-tasks",
+            json={"source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/"},
+        )
+        task_id = response.get_json()["data"]["id"]
+
+        from app.video_notes.services.task_service import TaskService
+
+        task = TaskService().task_repo.get_by_id(task_id)
+        self.assertEqual(task.status, "failed")
+        self.assertIn("boom", task.error_message or "")
+
     def test_create_video_note_task_rejects_invalid_url(self):
         response = self.client.post(
             "/api/video-note-tasks",

@@ -1,9 +1,9 @@
-import threading
 from pathlib import Path
 
 from flask import Blueprint, current_app, request
 
 from app.core import error_response, success_response
+from app.core.tasks import TaskExecutor
 from app.video_notes.runtime.bilibili import extract_bvid, resolve_video_title
 from app.video_notes.services.execution_service import ExecutionService
 from app.video_notes.services.task_service import TaskService
@@ -21,20 +21,35 @@ def _run_task_in_app_context(app, task_id):
         service.run_task(task_id)
 
 
+def _mark_failed_in_app_context(app, task_id, exc):
+    with app.app_context():
+        service = app.config.get("VIDEO_NOTE_TASK_SERVICE") or TaskService()
+        task = service.task_repo.get_by_id(task_id)
+        if task is None or task.status in ("completed", "failed"):
+            return
+        task = service.update_task(
+            task_id,
+            status="failed",
+            current_step="error",
+            error_message=str(exc),
+        )
+        service.append_log(task, f"Task failed: {exc}", level="error")
+
+
 def _task_executor():
     configured = current_app.config.get("VIDEO_NOTE_TASK_EXECUTOR")
     if configured:
         return configured
 
     app = current_app._get_current_object()
+    executor = TaskExecutor()
 
     def execute(task_id):
-        thread = threading.Thread(
-            target=_run_task_in_app_context,
-            args=(app, task_id),
-            daemon=True,
+        executor.submit(
+            task_id,
+            lambda: _run_task_in_app_context(app, task_id),
+            on_error=lambda exc: _mark_failed_in_app_context(app, task_id, exc),
         )
-        thread.start()
 
     return execute
 
