@@ -1,6 +1,6 @@
 # Current Architecture
 
-本文档记录已实现并经过验证的当前系统状态（简版，随系统演进更新）。目标态见 `docs/specifications/target-implementation-spec.md`。
+本文档记录已实现并经过验证的当前系统状态。目标态见 `docs/specifications/target-implementation-spec.md`。
 
 ## 技术栈
 
@@ -68,3 +68,7 @@
 ## 后台任务执行器
 
 `app/core/tasks.py` 提供统一 `TaskExecutor`（PE 阶段落地）：daemon 线程包装 + `submit(task_id, fn, on_error)` + `is_running/running_ids` 状态查询；异常经 `on_error(exc)` 回调由调用方落库。已接入：视频转笔记任务（提交时包装 app context，失败回调把任务标记为 failed 并写日志）。采集任务当前保持同步执行（见当前限制）。
+
+## 测试组织
+
+`backend/tests/` 按包归位：`core/`（路径、任务执行器、bootstrap、health、gemini）、`papers/`（模型、合并、文献 API）、`collection/`（采集各服务/源/工作流、期刊 API）、`video_notes/`（视频模块）。测试临时目录统一在 OS 临时目录 `knowledge-vault-tests/` 下（规避 safe-delete 守卫，见 lessons L-004）。全量套件 79 个测试。

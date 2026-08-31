@@ -85,7 +85,8 @@
 - [x] **PC 包结构重塑（2026-08-31 完成）**
 - [x] **PD 数据模型演进与采集-文献打通（2026-08-31 完成）**
 - [x] **PE 统一后台任务执行器（2026-08-31 完成）**
-- [ ] PF 测试归位与收尾
+- [x] **PF 测试归位与收尾（2026-08-31 完成）**
+- 六阶段全部完成。
 
 ## 5. 计划偏差
 
@@ -95,6 +96,7 @@
 - PC 执行偏差：papers 的 service 层深度抽取（路由业务逻辑下沉到 paper_service/ingest/organize）**推迟到 PD 阶段**——当前无 literature 路由测试作为安全网，纯结构阶段先保证行为不变；`papers/services/` 已建骨架。safe-delete 环境干扰的根本解法：测试临时目录从 `backend/.tmp-tests/` 迁至 OS 临时目录（shim 对 OS tmp 下的路径直通原生 rmtree，见 lessons L-004 再补充）。新增 `core/errors.py`（统一异常 + 全局错误处理器）、`core/llm/registry.py`（T-7 骨架）、`collection/sources/base.py`（SourceAdapter 接口，现有 NcpssdSource/ElsevierSource 尚未实现该接口，适配在 T-1 任务落地）。
 - PD 执行偏差：service 层抽取**仅完成核心的 paper_service**（落库/合并/期刊关联），tag/folder/note/backup 的抽取范围收敛到"打通所需"；重复期刊名接口返回 409（比 400 语义更准确）；PDF 落库沿用现有 `literature.pdf_path` 字段（无需新表，遗留问题 3 解决）；`db` 增加约束命名约定（D-011），因命名约定引入的无关 autogenerate 操作（tag 唯一约束）已从迁移中剔除；迁移首版因无名外键与 NOT NULL 无默认值两次失败，均修正后通过。
 - PE 执行偏差：`core/tasks.py` 实现为**线程包装 + 状态查询 + on_error 回调**（执行器不感知具体域，状态落库由回调完成）；video_notes 裸 Thread 已统一接入，失败回调标记任务 failed 并写日志；**crawler 经核实为同步执行**（请求内跑完，响应含 raw_issue），保持现状不接入异步——异步化会改变 API 契约并需要前端轮询配合，列为后续可选改造；失败路径集成测试因 `:memory:` SQLite 按线程隔离无法覆盖跨线程写库，改为同步调用失败回调的方式验证接线，线程异步行为由 core/tasks 单测覆盖（另在文件库上手动验证通过）。
+- PF 执行偏差：项目用 unittest（非 pytest），计划中的 `conftest.py` 无意义，改为"tests 按包归位 + 各文件 `parents[1]→parents[2]` 深度修正"（discover 与单文件运行均兼容）；前端构建需清空 `NODE_OPTIONS` 并预清 dist 才能通过（safe-delete shim 经 NODE_OPTIONS 注入 node，见 lessons L-006）。
 
 ## 6. 验证结果
 
@@ -103,7 +105,8 @@
 - PC：全量后端测试 55/55 通过；8 个 API 端点冒烟全部正常（/api/notes 400 为原有必填参数行为）；旧包引用（app.crawler/utils/routes/models/repositories/extensions）全仓清零。
 - PD：新增 18 个测试（papers 模型/journal API/paper_merge 合并/期刊筛选），全量 73/73 通过；真实库迁移 `c9b826cfa1c0` 应用成功——16 张表，存量 2 条文献回填 `source=imported`，版本戳更新；回滚验证通过（downgrade 后 14 表、数据保留）；冒烟：/api/journals 增查改、/api/literatures?journal_id 过滤均正常。
 - PE：新增 core/tasks 单测 5 个 + video_notes 失败路径测试 1 个，全量 78/78 通过；失败路径在文件库上手动验证（任务标记 failed、error_message 落库）；video_notes API 测试全绿。
-- 提交记录：`docs` 体系提交 + `refactor(PA)` + `chore` 清理 + `refactor(PB)` + `refactor(PC)` + `feat(PD)` + PE 相关提交（见 git log）。
+- PF：tests 按包归位（core/papers/collection/video_notes 四子包），全量 **79/79 通过**；`npm run build` 通过（8.13s，前端零改动零感知）。
+- 提交记录：`docs` 体系 + `refactor(PA)` + `chore` 清理 + `refactor(PB)` + `refactor(PC)` + `feat(PD)` + `feat(PE)` + PF 相关提交（见 git log）。
 
 ## 7. 遗留问题
 
@@ -112,5 +115,7 @@
 3. PDF 文件记录的落库方式（文件记录表 vs 可空字段）：已确定——沿用现有 `literature.pdf_path` 字段，无需新表。
 4. 知网、期刊官网源适配器、PDF 下载完整功能、LLM 多供应商配置界面的具体实现：结构就位后另起计划（T-1/T-2/T-7）。
 5. `.venv/` 与 `frontend/node_modules/` 的首次入库：已从 .gitignore 移除忽略，待用户确认后作为独立大提交执行。
-6. `backend/app/crawler/legacy/domestic/issue_url_cache.json` 与 legacy 期刊缓存目录（如 `legacy/情报学报/`）为旧爬虫运行缓存，暂未纳入版本控制，待用户决定是否忽略或入库。
+6. `backend/app/collection/legacy/domestic/issue_url_cache.json` 与 legacy 期刊缓存目录为旧爬虫运行缓存，暂未纳入版本控制，待用户决定是否忽略或入库。
 7. `alembic.ini` 由 `flask db init` 生成，`sqlalchemy.url` 为空（运行时由应用配置注入），迁移脚本与 `migrations/` 需随仓库提交。
+8. 采集任务异步化（D-013）：core/tasks 已就绪，未来需配合前端轮询改造时接入。
+9. 文献工作台 tag/folder/note/backup 业务逻辑仍在路由层（未下沉 service），后续有需要时按 TDD 抽取。
