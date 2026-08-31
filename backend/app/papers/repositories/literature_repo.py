@@ -18,7 +18,7 @@ class LiteratureRepository(BaseRepository):
         )
         return query.paginate(page=page, per_page=per_page, error_out=False)
     
-    def filter(self, page=1, per_page=10, status=None, language=None, year_start=None, year_end=None, tag_ids=None, folder_id=None, has_pdf=None, title=None, authors=None, abstract=None):
+    def filter(self, page=1, per_page=10, status=None, language=None, year_start=None, year_end=None, tag_ids=None, folder_id=None, has_pdf=None, title=None, authors=None, abstract=None, journal_id=None):
         query = self.model.query
         
         if title:
@@ -41,6 +41,8 @@ class LiteratureRepository(BaseRepository):
         if folder_id:
             from app.papers.models.folder import LiteratureFolder
             query = query.join(LiteratureFolder).filter(LiteratureFolder.folder_id == folder_id)
+        if journal_id:
+            query = query.filter(self.model.journal_id == journal_id)
         if has_pdf is not None:
             if has_pdf:
                 query = query.filter(self.model.pdf_path.isnot(None))

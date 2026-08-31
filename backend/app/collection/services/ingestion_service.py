@@ -8,6 +8,7 @@ from app.collection.repositories.raw_issue_repo import RawIssueRepository
 from app.collection.repositories.raw_paper_repo import RawPaperRepository
 from app.collection.services.artifact_service import ArtifactService
 from app.collection.services.task_service import TaskService
+from app.collection.pipeline.paper_merge import PaperMergeService
 
 
 class IngestionService:
@@ -18,10 +19,12 @@ class IngestionService:
         task_service=None,
         artifact_service=None,
         providers=None,
+        paper_merge=None,
     ):
         self.raw_issue_repo = raw_issue_repo or RawIssueRepository()
         self.raw_paper_repo = raw_paper_repo or RawPaperRepository()
         self.task_service = task_service or TaskService()
+        self.paper_merge = paper_merge or PaperMergeService()
         self.artifact_service = artifact_service or ArtifactService()
         self.providers = providers or {
             "domestic": NcpssdSource(),
@@ -52,6 +55,7 @@ class IngestionService:
                 papers=payload["papers"],
             )
             self.artifact_service.export_raw_issue(raw_issue)
+            self.paper_merge.sync_issue(raw_issue)
 
             task = self.task_service.update_task(
                 task.id,

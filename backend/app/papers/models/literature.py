@@ -23,6 +23,11 @@ class Literature(BaseModel):
     publisher = db.Column(db.String(200))
     status = db.Column(db.String(20), default='未读')
     status_changed_at = db.Column(db.DateTime)
+
+    # 来源溯源：手动导入（imported）或采集入库（collection，关联 raw_paper）
+    source = db.Column(db.String(20), nullable=False, default='imported', server_default='imported')
+    source_raw_paper_id = db.Column(db.Integer)
+    journal_id = db.Column(db.Integer, db.ForeignKey('journal.id'))
     
     tags = db.relationship('Tag', secondary='literature_tag', back_populates='literatures')
     folders = db.relationship('Folder', secondary='literature_folder', back_populates='literatures')
@@ -46,6 +51,9 @@ class Literature(BaseModel):
             'language': self.language,
             'literature_type': self.literature_type,
             'publisher': self.publisher,
+            'source': self.source,
+            'source_raw_paper_id': self.source_raw_paper_id,
+            'journal_id': self.journal_id,
             'status': self.status,
             'status_changed_at': self.status_changed_at.isoformat() if self.status_changed_at else None,
             'tags': [tag.to_dict() for tag in self.tags],

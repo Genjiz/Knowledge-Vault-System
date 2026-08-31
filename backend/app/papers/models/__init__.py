@@ -2,6 +2,7 @@ from app.papers.models.base import BaseModel
 from app.papers.models.literature import Literature
 from app.papers.models.tag import Tag, LiteratureTag
 from app.papers.models.folder import Folder, LiteratureFolder
+from app.papers.models.journal import Journal, JournalSourceConfig
 from app.papers.models.note import Note
 
 __all__ = [
@@ -12,6 +13,8 @@ __all__ = [
     'Folder',
     'LiteratureFolder',
     'Note',
+    'Journal',
+    'JournalSourceConfig',
     'CrawlTask',
     'CrawlTaskLog',
     'LLMRun',

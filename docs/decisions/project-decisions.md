@@ -65,3 +65,27 @@
 - 内容：仓库托管于 GitHub 私有仓库；`.venv/`、`frontend/node_modules/` 与全部运行数据（数据库、上传文件、任务产物）随仓库提交；`.crawler-browser-profile/` 与密钥类文件（`.env`、`gemini_api_key.txt`）不提交；SQLite 数据库按里程碑提交。
 - 理由：跨机器直接可用，环境与数据不依赖本机状态；密钥安全是绝对底线；避免二进制快照膨胀。
 - 影响：`.gitignore` 相应调整；采集的版权材料仅限私有仓库，转公开前需用户确认。
+
+## D-009 采集与文献打通：统一论文实体 + 溯源
+
+- 状态：已生效
+- 日期：2026-08-31
+- 内容：采集数据与文献工作台打通（T-4）：`literature` 成为统一论文实体，新增 `source`（imported/collection）、`source_raw_paper_id`（溯源到 raw_paper）、`journal_id`；raw_issue/raw_paper 保留为采集原始记录层（审计、重跑、合并依据）；采集入库走 `collection/pipeline/paper_merge.py` → `papers/services/paper_service.py` 的 upsert（依赖方向 collection → papers 单向，papers 不感知采集模型）。
+- 理由：采集与导入殊途同归到单一实体；raw 层保留可重跑、可溯源；论文允许只有题录而无 PDF。
+- 影响：合并规则为标题规范化去重（忽略大小写/空白），已存在只填空字段不覆盖用户数据；采集流程（ingestion_service）自动同步入库。
+
+## D-010 期刊一等实体与采集源配置
+
+- 状态：已生效
+- 日期：2026-08-31
+- 内容：新增 `journal` 表（name 唯一、issn、publisher）作为论文与采集共用的期刊实体（T-5 期刊筛选）；新增 `journal_source_config` 表记录每期刊支持的采集源（T-1，source_id 可选值 ncpssd/elsevier/cnki/official）；`/api/literatures` 支持 `journal_id` 过滤；新增 `/api/journals` 读写接口。
+- 理由：期刊筛选与"按期刊选采集源"都需要期刊成为一等实体；期刊字符串字段（literature.journal）保留兼容前端列表。
+- 影响：`journal_source_config` 是前端"选择采集源"的数据基础；cnki/official 仅注册标识，适配器实现待 T-1 任务。
+
+## D-011 SQLAlchemy 约束命名约定
+
+- 状态：已生效
+- 日期：2026-08-31
+- 内容：`db` 使用带 naming_convention 的 MetaData（ix/uq/ck/fk/pk 统一命名），约束自动获得稳定名称。
+- 理由：SQLite 批量迁移要求约束必须有名字，否则 alembic 自动生成的迁移会因无名外键失败（"Constraint must have a name"）。
+- 影响：后续 autogenerate 生成的约束均带标准名称；已应用的初始迁移不受影响。

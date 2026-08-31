@@ -19,6 +19,7 @@ def create_app(config_name=None):
     os.makedirs(upload_folder, exist_ok=True)
     app.config['UPLOAD_FOLDER'] = upload_folder
     
+    from app.papers.models import Journal, JournalSourceConfig
     from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note
     from app.collection.models import CrawlTask, CrawlTaskLog, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
     from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
