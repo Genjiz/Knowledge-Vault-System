@@ -1,7 +1,7 @@
 import os
 from flask import Flask, send_from_directory
 from config import config
-from app.extensions import db, cors, migrate
+from app.core.extensions import db, cors, migrate
 
 
 def create_app(config_name=None):
@@ -19,15 +19,18 @@ def create_app(config_name=None):
     os.makedirs(upload_folder, exist_ok=True)
     app.config['UPLOAD_FOLDER'] = upload_folder
     
-    from app.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note
-    from app.crawler.models import CrawlTask, CrawlTaskLog, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
+    from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note
+    from app.collection.models import CrawlTask, CrawlTaskLog, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
     from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
     
     @app.route('/uploads/pdfs/<path:filename>')
     def serve_upload(filename):
         return send_from_directory(upload_folder, filename)
     
-    from app.routes import register_routes
+    from app.papers.routes import register_routes
     register_routes(app)
-    
+
+    from app.core.errors import register_error_handlers
+    register_error_handlers(app)
+
     return app

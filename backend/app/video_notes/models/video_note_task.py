@@ -1,5 +1,5 @@
-from app.extensions import db
-from app.models.base import BaseModel
+from app.core.extensions import db
+from app.papers.models.base import BaseModel
 
 
 class VideoNoteTask(BaseModel):

@@ -1,6 +1,8 @@
 import json
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,13 +11,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class IngestionWorkflowTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_dir = BACKEND_DIR / ".tmp-tests" / "workflow-artifacts"
+        self.temp_dir = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "workflow-artifacts"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -33,7 +35,7 @@ class IngestionWorkflowTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_dir)
 
     def test_run_ingestion_creates_task_persists_issue_and_exports_json(self):
-        from app.crawler.services.ingestion_service import IngestionService
+        from app.collection.services.ingestion_service import IngestionService
 
         class FakeProvider:
             def fetch_issue(self, journal_name, year, issue):
@@ -74,9 +76,9 @@ class IngestionWorkflowTestCase(unittest.TestCase):
         self.assertEqual(len(task.logs), 2)
 
     def test_run_ingestion_marks_task_failed_when_provider_raises(self):
-        from app.crawler.providers.base import ProviderError
-        from app.crawler.services.ingestion_service import IngestionService
-        from app.crawler.models import CrawlTask
+        from app.collection.sources.base import ProviderError
+        from app.collection.services.ingestion_service import IngestionService
+        from app.collection.models import CrawlTask
 
         class FakeProvider:
             def fetch_issue(self, journal_name, year, issue):

@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -11,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class ProviderModuleLoadingTestCase(unittest.TestCase):
     def setUp(self):
-        self.temp_root = BACKEND_DIR / ".tmp-tests" / "provider-module-loading"
+        self.temp_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "provider-module-loading"
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)
@@ -21,7 +23,7 @@ class ProviderModuleLoadingTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_root)
 
     def test_foreign_provider_import_module_supports_sibling_imports(self):
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.elsevier import ElsevierSource
 
         temp_path = self.temp_root / "foreign"
         temp_path.mkdir(parents=True, exist_ok=True)
@@ -38,13 +40,13 @@ class ProviderModuleLoadingTestCase(unittest.TestCase):
             encoding="utf-8",
         )
 
-        provider = ForeignCrawlerProvider()
+        provider = ElsevierSource()
         module = provider._import_module("loader_target", [str(temp_path), "loader_target.py"])
 
         self.assertEqual(module.ANSWER, 42)
 
     def test_domestic_provider_default_loader_supports_sibling_imports(self):
-        from app.crawler.providers.domestic_provider import DomesticCrawlerProvider
+        from app.collection.sources.ncpssd import NcpssdSource
 
         temp_path = self.temp_root / "domestic"
         temp_path.mkdir(parents=True, exist_ok=True)
@@ -63,7 +65,7 @@ class ProviderModuleLoadingTestCase(unittest.TestCase):
             encoding="utf-8",
         )
 
-        provider = DomesticCrawlerProvider()
+        provider = NcpssdSource()
         provider._crawler_factory = None
         provider._default_script_path = target_script
 

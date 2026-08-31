@@ -1,5 +1,7 @@
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,20 +10,20 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class AnalysisServiceTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_dir = BACKEND_DIR / ".tmp-tests" / "analysis-artifacts"
+        self.temp_dir = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "analysis-artifacts"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.app.config["ARTIFACT_ROOT"] = str(self.temp_dir)
         self.ctx = self.app.app_context()
         self.ctx.push()
-        from app.crawler.models import RawIssue, RawPaper  # noqa: F401
+        from app.collection.models import RawIssue, RawPaper  # noqa: F401
 
         db.create_all()
 
@@ -34,8 +36,8 @@ class AnalysisServiceTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_dir)
 
     def test_analyze_issue_saves_analysis_and_exports_markdown(self):
-        from app.crawler.models import RawIssue, RawPaper
-        from app.crawler.services.analysis_service import AnalysisService
+        from app.collection.models import RawIssue, RawPaper
+        from app.collection.services.analysis_service import AnalysisService
 
         raw_issue = RawIssue(
             source_type="foreign",

@@ -1,6 +1,8 @@
 import os
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -23,15 +25,15 @@ class GeminiRuntimeTestCase(unittest.TestCase):
         self.saved_env = {name: os.environ.get(name) for name in self.env_names}
         for name in self.env_names:
             os.environ.pop(name, None)
-        self.temp_root = BACKEND_DIR / ".tmp-tests" / "gemini-runtime"
+        self.temp_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "gemini-runtime"
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
-        from app.crawler.runtime import gemini_runtime
+        from app.core.llm import gemini
 
-        gemini_runtime.load_runtime_env.cache_clear()
+        gemini.load_runtime_env.cache_clear()
         for name in self.env_names:
             os.environ.pop(name, None)
             if self.saved_env[name] is not None:
@@ -40,20 +42,20 @@ class GeminiRuntimeTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_root)
 
     def test_load_gemini_api_key_from_root_dotenv(self):
-        from app.crawler.runtime import gemini_runtime
+        from app.core.llm import gemini
 
         root = self.temp_root / "api-key"
         root.mkdir(parents=True, exist_ok=True)
         (root / ".env").write_text("GEMINI_API_KEY=dotenv-test-key\n", encoding="utf-8")
 
-        with patch.object(gemini_runtime, "get_project_root", return_value=root), patch.object(
-            gemini_runtime, "get_workspace_root", return_value=root
+        with patch.object(gemini, "get_project_root", return_value=root), patch.object(
+            gemini, "get_workspace_root", return_value=root
         ):
-            gemini_runtime.load_runtime_env.cache_clear()
-            self.assertEqual(gemini_runtime.load_gemini_api_key(), "dotenv-test-key")
+            gemini.load_runtime_env.cache_clear()
+            self.assertEqual(gemini.load_gemini_api_key(), "dotenv-test-key")
 
     def test_create_gemini_client_uses_proxy_from_dotenv(self):
-        from app.crawler.runtime import gemini_runtime
+        from app.core.llm import gemini
 
         class FakeHttpOptions:
             def __init__(self, **kwargs):
@@ -84,11 +86,11 @@ class GeminiRuntimeTestCase(unittest.TestCase):
             encoding="utf-8",
         )
 
-        with patch.object(gemini_runtime, "get_project_root", return_value=root), patch.object(
-            gemini_runtime, "get_workspace_root", return_value=root
-        ), patch.object(gemini_runtime.importlib, "import_module", side_effect=fake_import_module):
-            gemini_runtime.load_runtime_env.cache_clear()
-            result = gemini_runtime.create_gemini_client()
+        with patch.object(gemini, "get_project_root", return_value=root), patch.object(
+            gemini, "get_workspace_root", return_value=root
+        ), patch.object(gemini.importlib, "import_module", side_effect=fake_import_module):
+            gemini.load_runtime_env.cache_clear()
+            result = gemini.create_gemini_client()
 
         self.assertEqual(result["api_key"], "dotenv-test-key")
         http_options = result["http_options"]

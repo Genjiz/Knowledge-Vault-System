@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,7 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class TranslationProviderTestCase(unittest.TestCase):
     def test_translate_papers_returns_index_aligned_translations(self):
-        from app.crawler.providers.translation_provider import TranslationProvider
+        from app.collection.providers.translation_provider import TranslationProvider
 
         class FakeChunk:
             def __init__(self, text):

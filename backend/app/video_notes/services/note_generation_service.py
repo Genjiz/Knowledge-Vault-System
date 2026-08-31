@@ -1,7 +1,7 @@
 from flask import current_app
 
-from app.crawler.providers.base import ProviderError
-from app.crawler.runtime.gemini_runtime import create_gemini_client
+from app.collection.sources.base import ProviderError
+from app.core.llm.gemini import create_gemini_client
 
 
 class NoteGenerationService:

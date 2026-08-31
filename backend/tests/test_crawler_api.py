@@ -1,5 +1,7 @@
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,20 +10,20 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class CrawlerApiTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_dir = BACKEND_DIR / ".tmp-tests" / "api-artifacts"
+        self.temp_dir = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "api-artifacts"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.app.config["ARTIFACT_ROOT"] = str(self.temp_dir)
         self.ctx = self.app.app_context()
         self.ctx.push()
-        from app.crawler.models import RawIssue, RawPaper  # noqa: F401
+        from app.collection.models import RawIssue, RawPaper  # noqa: F401
 
         db.create_all()
         self.client = self.app.test_client()
@@ -35,7 +37,7 @@ class CrawlerApiTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_dir)
 
     def _seed_issue(self):
-        from app.crawler.models import CrawlTask, RawIssue, RawPaper
+        from app.collection.models import CrawlTask, RawIssue, RawPaper
 
         task = CrawlTask(
             task_type="crawl",
@@ -102,7 +104,7 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertEqual(payload["data"]["raw_issue"]["id"], raw_issue.id)
 
     def test_create_crawl_task_returns_error_response_when_provider_fails(self):
-        from app.crawler.providers.base import ProviderError
+        from app.collection.sources.base import ProviderError
 
         class FakeIngestionService:
             def run_ingestion(self, source_type, journal_name, year, issue):
@@ -143,7 +145,7 @@ class CrawlerApiTestCase(unittest.TestCase):
 
         class FakeTranslationService:
             def translate_issue(self, raw_issue_id):
-                from app.crawler.models import RawIssue
+                from app.collection.models import RawIssue
 
                 issue = db.session.get(RawIssue, raw_issue_id)
                 issue.translation_status = "completed"
@@ -152,7 +154,7 @@ class CrawlerApiTestCase(unittest.TestCase):
 
         class FakeAnalysisService:
             def analyze_issue(self, raw_issue_id):
-                from app.crawler.models import RawIssueAnalysis
+                from app.collection.models import RawIssueAnalysis
 
                 analysis = RawIssueAnalysis(
                     raw_issue_id=raw_issue_id,
@@ -180,7 +182,7 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertEqual(analysis.get_json()["data"]["content_markdown"], "# Analysis")
 
     def test_translate_and_analyze_return_error_response_when_provider_fails(self):
-        from app.crawler.providers.base import ProviderError
+        from app.collection.sources.base import ProviderError
 
         _, raw_issue = self._seed_issue()
 

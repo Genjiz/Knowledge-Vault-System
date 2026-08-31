@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -7,7 +9,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class CrawlerServiceSmokeTestCase(unittest.TestCase):
@@ -24,8 +26,8 @@ class CrawlerServiceSmokeTestCase(unittest.TestCase):
         self.ctx.pop()
 
     def test_can_create_task_and_persist_raw_issue_payload(self):
-        from app.crawler.services.ingestion_service import IngestionService
-        from app.crawler.services.task_service import TaskService
+        from app.collection.services.ingestion_service import IngestionService
+        from app.collection.services.task_service import TaskService
 
         task_service = TaskService()
         ingestion_service = IngestionService()

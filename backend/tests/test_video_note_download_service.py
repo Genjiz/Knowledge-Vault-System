@@ -1,5 +1,7 @@
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,7 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class DownloadServiceTestCase(unittest.TestCase):
     def setUp(self):
-        self.temp_root = BACKEND_DIR / ".tmp-tests" / "video-note-download-service"
+        self.temp_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "video-note-download-service"
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)

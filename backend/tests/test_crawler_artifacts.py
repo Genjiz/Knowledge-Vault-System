@@ -1,6 +1,8 @@
 import json
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,13 +11,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class CrawlerArtifactServiceTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_dir = BACKEND_DIR / ".tmp-tests" / "artifacts"
+        self.temp_dir = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "artifacts"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -33,8 +35,8 @@ class CrawlerArtifactServiceTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_dir)
 
     def test_exports_raw_issue_json_and_analysis_markdown(self):
-        from app.crawler.models import RawIssue, RawIssueAnalysis, RawPaper
-        from app.crawler.services.artifact_service import ArtifactService
+        from app.collection.models import RawIssue, RawIssueAnalysis, RawPaper
+        from app.collection.services.artifact_service import ArtifactService
 
         raw_issue = RawIssue(
             source_type="foreign",

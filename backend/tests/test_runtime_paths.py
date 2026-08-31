@@ -1,5 +1,7 @@
 import os
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 import shutil
@@ -12,7 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class RuntimePathTestCase(unittest.TestCase):
     def setUp(self):
-        self.temp_root = BACKEND_DIR / ".tmp-tests" / "runtime-paths"
+        self.temp_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "runtime-paths"
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)
@@ -34,7 +36,7 @@ class RuntimePathTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_root)
 
     def test_workspace_root_points_to_flattened_project_root(self):
-        from app.crawler.runtime.paths import get_workspace_root
+        from app.collection.runtime.paths import get_workspace_root
 
         root = get_workspace_root()
 
@@ -42,12 +44,12 @@ class RuntimePathTestCase(unittest.TestCase):
         self.assertTrue((root / "frontend").exists())
 
     def test_project_root_matches_workspace_root_after_flattening(self):
-        from app.crawler.runtime.paths import get_project_root, get_workspace_root
+        from app.collection.runtime.paths import get_project_root, get_workspace_root
 
         self.assertEqual(get_project_root(), get_workspace_root())
 
     def test_browser_data_root_supports_environment_override(self):
-        from app.crawler.runtime.paths import get_browser_data_root
+        from app.collection.runtime.paths import get_browser_data_root
 
         override = self.temp_root / "browser-data"
         os.environ["CRAWLER_BROWSER_DATA_ROOT"] = str(override)
@@ -55,7 +57,7 @@ class RuntimePathTestCase(unittest.TestCase):
         self.assertEqual(get_browser_data_root(), override)
 
     def test_browser_data_root_defaults_to_project_profile_directory(self):
-        import app.crawler.runtime.paths as runtime_paths
+        import app.collection.runtime.paths as runtime_paths
 
         workspace_root = self.temp_root / "workspace"
         project_default = workspace_root / ".crawler-browser-profile"
@@ -65,7 +67,7 @@ class RuntimePathTestCase(unittest.TestCase):
             self.assertEqual(runtime_paths.get_browser_data_root(), project_default)
 
     def test_find_chrome_executable_supports_environment_override(self):
-        from app.crawler.runtime.paths import find_chrome_executable
+        from app.collection.runtime.paths import find_chrome_executable
 
         fake_chrome = self.temp_root / "chrome.exe"
         fake_chrome.write_text("", encoding="utf-8")

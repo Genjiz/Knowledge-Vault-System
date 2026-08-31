@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 import os
@@ -11,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class ForeignProviderContractTestCase(unittest.TestCase):
     def setUp(self):
-        self.temp_profile_root = BACKEND_DIR / ".tmp-tests" / "foreign-provider-profile"
+        self.temp_profile_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "foreign-provider-profile"
         if self.temp_profile_root.exists():
             shutil.rmtree(self.temp_profile_root)
         self.temp_profile_root.mkdir(parents=True, exist_ok=True)
@@ -27,7 +29,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_profile_root)
 
     def test_foreign_provider_returns_structured_issue_payload(self):
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeMapper:
             def get_calculated_volume(self, journal_name, year):
@@ -45,7 +47,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
                     }
                 ]
 
-        provider = ForeignCrawlerProvider(
+        provider = ElsevierSource(
             mapper_factory=FakeMapper,
             crawler_factory=FakeCrawler,
             journal_slugs={"Information Processing & Management": "information-processing-and-management"},
@@ -65,10 +67,10 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         self.assertEqual(payload["papers"][0]["abstract_zh"], "")
 
     def test_foreign_provider_raises_clear_error_for_unknown_journal(self):
-        from app.crawler.providers.base import ProviderError
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.base import ProviderError
+        from app.collection.sources.elsevier import ElsevierSource
 
-        provider = ForeignCrawlerProvider(
+        provider = ElsevierSource(
             mapper_factory=lambda: None,
             crawler_factory=lambda: None,
             journal_slugs={},
@@ -81,8 +83,8 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         self.assertIn("Unknown journal", str(ctx.exception))
 
     def test_foreign_provider_raises_when_crawler_returns_no_papers(self):
-        from app.crawler.providers.base import ProviderError
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.base import ProviderError
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeMapper:
             def get_calculated_volume(self, journal_name, year):
@@ -92,7 +94,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
             def crawl_issue(self, issue_url):
                 return []
 
-        provider = ForeignCrawlerProvider(
+        provider = ElsevierSource(
             mapper_factory=FakeMapper,
             crawler_factory=FakeCrawler,
             journal_slugs={"Information Processing & Management": "information-processing-and-management"},
@@ -105,7 +107,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         self.assertIn("returned zero papers", str(ctx.exception))
 
     def test_foreign_provider_tolerates_legacy_console_output(self):
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeMapper:
             def get_calculated_volume(self, journal_name, year):
@@ -116,7 +118,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
                 print("legacy output \U0001f680")
                 return [{"title": "Paper A", "detail_url": "https://example.com/a"}]
 
-        provider = ForeignCrawlerProvider(
+        provider = ElsevierSource(
             mapper_factory=FakeMapper,
             crawler_factory=FakeCrawler,
             journal_slugs={"Information Processing & Management": "information-processing-and-management"},
@@ -130,8 +132,8 @@ class ForeignProviderContractTestCase(unittest.TestCase):
     def test_foreign_provider_precheck_error_message_is_clear(self):
         import requests
         from unittest.mock import patch
-        from app.crawler.providers.base import ProviderError
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.base import ProviderError
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeMapper:
             def get_calculated_volume(self, journal_name, year):
@@ -141,7 +143,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
             def crawl_issue(self, issue_url):
                 return [{"title": "Paper A"}]
 
-        provider = ForeignCrawlerProvider(
+        provider = ElsevierSource(
             mapper_factory=FakeMapper,
             crawler_factory=FakeCrawler,
             journal_slugs={"Information Processing & Management": "information-processing-and-management"},
@@ -150,7 +152,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         )
 
         with patch(
-            "app.crawler.providers.foreign_provider.requests.get",
+            "app.collection.sources.elsevier.requests.get",
             side_effect=requests.RequestException("network down"),
         ):
             with self.assertRaises(ProviderError) as ctx:
@@ -161,7 +163,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         self.assertIn("开启 VPN", message)
 
     def test_create_chromium_page_falls_back_from_attach_to_launch(self):
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeOptions:
             def __init__(self):
@@ -193,7 +195,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
                     raise RuntimeError("attach failed")
                 return {"ok": True, "options": options}
 
-        provider = ForeignCrawlerProvider()
+        provider = ElsevierSource()
         provider._is_debug_port_open = lambda port: True
         page = provider._create_chromium_page(FakeModule, None, self.temp_profile_root)
 
@@ -203,7 +205,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
         self.assertEqual(FakeModule.calls[1].user_data_path, str(self.temp_profile_root))
 
     def test_create_chromium_page_skips_attach_when_debug_port_is_closed(self):
-        from app.crawler.providers.foreign_provider import ForeignCrawlerProvider
+        from app.collection.sources.elsevier import ElsevierSource
 
         class FakeOptions:
             def __init__(self):
@@ -231,7 +233,7 @@ class ForeignProviderContractTestCase(unittest.TestCase):
                 FakeModule.calls.append(options)
                 return {"ok": True, "options": options}
 
-        provider = ForeignCrawlerProvider()
+        provider = ElsevierSource()
         provider._is_debug_port_open = lambda port: False
         page = provider._create_chromium_page(FakeModule, None, self.temp_profile_root)
 

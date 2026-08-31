@@ -1,5 +1,5 @@
-from app.extensions import db
-from app.repositories.base import BaseRepository
+from app.core.extensions import db
+from app.papers.repositories.base import BaseRepository
 from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
 
 

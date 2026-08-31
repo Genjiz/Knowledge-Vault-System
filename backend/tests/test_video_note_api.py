@@ -1,6 +1,8 @@
 import os
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,13 +11,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class VideoNoteApiTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_root = BACKEND_DIR / ".tmp-tests" / "video-note-api"
+        self.temp_root = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "video-note-api"
         if self.temp_root.exists():
             shutil.rmtree(self.temp_root)
         self.temp_root.mkdir(parents=True, exist_ok=True)

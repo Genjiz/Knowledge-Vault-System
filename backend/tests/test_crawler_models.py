@@ -1,13 +1,15 @@
 import unittest
 from pathlib import Path
 import sys
+import tempfile
+import tempfile
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class CrawlerModelRegistrationTestCase(unittest.TestCase):
@@ -23,7 +25,7 @@ class CrawlerModelRegistrationTestCase(unittest.TestCase):
         self.ctx.pop()
 
     def test_crawler_models_are_importable_from_app_models(self):
-        from app.models import (  # noqa: F401
+        from app.papers.models import (  # noqa: F401
             CrawlTask,
             CrawlTaskLog,
             LLMRun,

@@ -1,6 +1,8 @@
 import json
 import shutil
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,20 +11,20 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class TranslationServiceTestCase(unittest.TestCase):
     def setUp(self):
         self.app = create_app("testing")
-        self.temp_dir = BACKEND_DIR / ".tmp-tests" / "translation-artifacts"
+        self.temp_dir = Path(tempfile.gettempdir()) / "knowledge-vault-tests" / "translation-artifacts"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.app.config["ARTIFACT_ROOT"] = str(self.temp_dir)
         self.ctx = self.app.app_context()
         self.ctx.push()
-        from app.crawler.models import RawIssue, RawPaper  # noqa: F401
+        from app.collection.models import RawIssue, RawPaper  # noqa: F401
 
         db.create_all()
 
@@ -35,9 +37,9 @@ class TranslationServiceTestCase(unittest.TestCase):
             shutil.rmtree(self.temp_dir)
 
     def test_translate_issue_updates_fields_and_regenerates_json(self):
-        from app.crawler.models import RawIssue, RawPaper
-        from app.crawler.services.artifact_service import ArtifactService
-        from app.crawler.services.translation_service import TranslationService
+        from app.collection.models import RawIssue, RawPaper
+        from app.collection.services.artifact_service import ArtifactService
+        from app.collection.services.translation_service import TranslationService
 
         raw_issue = RawIssue(
             source_type="foreign",

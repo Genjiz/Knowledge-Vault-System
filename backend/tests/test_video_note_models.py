@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,7 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 
 
 class VideoNoteModelTestCase(unittest.TestCase):

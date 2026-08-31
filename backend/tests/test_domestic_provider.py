@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,7 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 class DomesticProviderContractTestCase(unittest.TestCase):
     def test_domestic_provider_returns_structured_issue_payload(self):
-        from app.crawler.providers.domestic_provider import DomesticCrawlerProvider
+        from app.collection.sources.ncpssd import NcpssdSource
 
         class FakeCrawler:
             def crawl_journal_papers(self, journal_name, year, issue):
@@ -30,7 +32,7 @@ class DomesticProviderContractTestCase(unittest.TestCase):
                     ],
                 }
 
-        provider = DomesticCrawlerProvider(crawler_factory=FakeCrawler)
+        provider = NcpssdSource(crawler_factory=FakeCrawler)
         payload = provider.fetch_issue("图书情报知识", 2024, 6)
 
         self.assertEqual(payload["issue"]["source_type"], "domestic")
@@ -41,7 +43,7 @@ class DomesticProviderContractTestCase(unittest.TestCase):
         self.assertEqual(payload["papers"][0]["keywords_json"], '["k1", "k2"]')
 
     def test_domestic_provider_tolerates_legacy_console_output(self):
-        from app.crawler.providers.domestic_provider import DomesticCrawlerProvider
+        from app.collection.sources.ncpssd import NcpssdSource
 
         class FakeCrawler:
             def crawl_journal_papers(self, journal_name, year, issue):
@@ -54,21 +56,21 @@ class DomesticProviderContractTestCase(unittest.TestCase):
                     "papers": [{"title": "Paper A", "keywords": []}],
                 }
 
-        provider = DomesticCrawlerProvider(crawler_factory=FakeCrawler)
+        provider = NcpssdSource(crawler_factory=FakeCrawler)
         payload = provider.fetch_issue("\u6d4b\u8bd5\u671f\u520a", 2024, "3")
 
         self.assertEqual(payload["papers"][0]["title"], "Paper A")
 
     def test_domestic_provider_precheck_error_message_is_clear(self):
-        from app.crawler.providers.base import ProviderError
-        from app.crawler.providers.domestic_provider import DomesticCrawlerProvider
+        from app.collection.sources.base import ProviderError
+        from app.collection.sources.ncpssd import NcpssdSource
         import requests
         from unittest.mock import patch
 
-        provider = DomesticCrawlerProvider(crawler_factory=lambda: None, enable_network_precheck=True)
+        provider = NcpssdSource(crawler_factory=lambda: None, enable_network_precheck=True)
 
         with patch(
-            "app.crawler.providers.domestic_provider.requests.get",
+            "app.collection.sources.ncpssd.requests.get",
             side_effect=requests.RequestException("network down"),
         ):
             with self.assertRaises(ProviderError) as ctx:

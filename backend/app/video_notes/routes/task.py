@@ -3,7 +3,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, request
 
-from app.utils import error_response, success_response
+from app.core import error_response, success_response
 from app.video_notes.runtime.bilibili import extract_bvid, resolve_video_title
 from app.video_notes.services.execution_service import ExecutionService
 from app.video_notes.services.task_service import TaskService
