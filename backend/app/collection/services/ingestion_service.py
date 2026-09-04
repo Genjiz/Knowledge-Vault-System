@@ -1,14 +1,39 @@
+import json
 from datetime import datetime, timezone
 
 from app.core.extensions import db
 from app.collection.sources.base import ProviderError
-from app.collection.sources.ncpssd import NcpssdSource
-from app.collection.sources.elsevier import ElsevierSource
+from app.collection.sources.registry import get_source
 from app.collection.repositories.raw_issue_repo import RawIssueRepository
 from app.collection.repositories.raw_paper_repo import RawPaperRepository
 from app.collection.services.artifact_service import ArtifactService
 from app.collection.services.task_service import TaskService
 from app.collection.pipeline.paper_merge import PaperMergeService
+
+
+def load_source_config(journal_name, source_id):
+    """读取期刊在某采集源下的配置（如 Magtech 的 base_url）。
+
+    期刊-源配置由 papers 域的 journal_source_config 承载；未配置或未启用时
+    返回空 dict，由源自身决定缺少必填配置时如何报错。
+    """
+    from app.papers.models import Journal, JournalSourceConfig
+
+    row = (
+        JournalSourceConfig.query.join(Journal, Journal.id == JournalSourceConfig.journal_id)
+        .filter(
+            Journal.name == journal_name,
+            JournalSourceConfig.source_id == source_id,
+            JournalSourceConfig.enabled.is_(True),
+        )
+        .first()
+    )
+    if row is None or not row.config_json:
+        return {}
+    try:
+        return json.loads(row.config_json)
+    except (TypeError, ValueError):
+        return {}
 
 
 class IngestionService:
@@ -20,25 +45,32 @@ class IngestionService:
         artifact_service=None,
         providers=None,
         paper_merge=None,
+        config_loader=None,
     ):
         self.raw_issue_repo = raw_issue_repo or RawIssueRepository()
         self.raw_paper_repo = raw_paper_repo or RawPaperRepository()
         self.task_service = task_service or TaskService()
         self.paper_merge = paper_merge or PaperMergeService()
         self.artifact_service = artifact_service or ArtifactService()
-        self.providers = providers or {
-            "domestic": NcpssdSource(),
-            "foreign": ElsevierSource(),
-        }
+        # providers 仅测试注入用（source_id → 实例）；生产路径统一走注册表
+        self.providers = providers
+        self.config_loader = config_loader or load_source_config
+
+    def _resolve_provider(self, source_id, journal_name):
+        if self.providers is not None:
+            return self.providers.get(source_id)
+        return get_source(source_id, self.config_loader(journal_name, source_id))
 
     def run_ingestion(self, source_type, journal_name, year, issue):
-        provider = self.providers.get(source_type)
+        # source_type 即真实采集源 id（ncpssd/magtech/elsevier）
+        provider = self._resolve_provider(source_type, journal_name)
         if provider is None:
             raise ValueError(f"Unsupported source type: {source_type}")
 
         task = self.task_service.create_task(
             task_type="crawl",
             source_type=source_type,
+            region=getattr(provider, "region", None),
             journal_name=journal_name,
             year=year,
             issue=str(issue),
@@ -89,6 +121,7 @@ class IngestionService:
 
         raw_issue_data = {
             "source_type": issue_data["source_type"],
+            "region": issue_data.get("region") or getattr(task, "region", None),
             "journal_name": issue_data["journal_name"],
             "journal_slug": issue_data.get("journal_slug"),
             "year": issue_data["year"],

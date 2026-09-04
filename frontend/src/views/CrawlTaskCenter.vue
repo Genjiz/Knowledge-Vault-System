@@ -39,38 +39,97 @@
           </div>
         </template>
 
-        <el-form label-position="top" :model="form" class="space-y-4">
-          <el-form-item label="数据源">
-            <el-radio-group v-model="form.source_type" size="large">
-              <el-radio-button v-for="option in sourceOptions" :key="option.value" :label="option.value">
-                {{ option.label }}
-              </el-radio-button>
-            </el-radio-group>
-          </el-form-item>
+        <el-alert
+          v-if="journalHint"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="journalHint"
+          class="rounded-2xl"
+        >
+          <el-button text type="primary" @click="$router.push('/crawler/journals')">前往配置采集源</el-button>
+        </el-alert>
 
+        <el-form label-position="top" :model="form" class="space-y-4">
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            <el-form-item class="lg:col-span-7" label="期刊名称">
+            <el-form-item class="lg:col-span-5" label="期刊">
               <el-select
                 v-model="form.journal_name"
                 class="w-full"
                 filterable
-                allow-create
-                default-first-option
                 clearable
-                placeholder="选择历史期刊或输入新期刊"
+                placeholder="选择已配置的期刊"
+                @change="handleJournalChange"
               >
-                <el-option v-for="name in filteredJournalOptions" :key="name" :label="name" :value="name" />
+                <el-option
+                  v-for="journal in journalOptions"
+                  :key="journal.id"
+                  :label="journal.name"
+                  :value="journal.name"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item class="lg:col-span-4" label="采集源">
+              <el-select
+                v-model="form.source_type"
+                class="w-full"
+                placeholder="选择该期刊已启用的采集源"
+                :disabled="!form.journal_name"
+                @change="handleSourceChange"
+              >
+                <el-option
+                  v-for="source in availableSources"
+                  :key="source.source_id"
+                  :label="source.display_name"
+                  :value="source.source_id"
+                >
+                  <span>{{ source.display_name }}</span>
+                  <span v-if="source.is_default" class="ml-2 text-xs text-emerald-600">默认</span>
+                </el-option>
               </el-select>
             </el-form-item>
 
             <el-form-item class="lg:col-span-3" label="年份">
-              <el-input-number v-model="form.year" :min="1990" :max="2035" class="w-full" />
-            </el-form-item>
-
-            <el-form-item class="lg:col-span-2" label="期号">
-              <el-input v-model="form.issue" placeholder="例如 2" />
+              <el-input-number v-model="form.year" :min="1990" :max="2035" class="w-full" @change="resetProbe" />
             </el-form-item>
           </div>
+
+          <el-form-item label="期号">
+            <div class="flex w-full flex-col gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <el-input v-model="form.issue" class="w-32" placeholder="例如 2" @input="form.issuePicked = false" />
+                <el-button
+                  plain
+                  :loading="probing"
+                  :disabled="!canProbeIssues"
+                  @click="probeIssues"
+                >
+                  探测期号
+                </el-button>
+                <span v-if="!canProbeIssues" class="text-xs text-slate-400">
+                  {{ probeHint }}
+                </span>
+              </div>
+              <div v-if="probeIssuesList.length" class="flex flex-wrap gap-2">
+                <el-tag
+                  v-for="item in probeIssuesList"
+                  :key="item.issue"
+                  effect="plain"
+                  round
+                  class="cursor-pointer"
+                  :type="String(form.issue) === String(item.issue) ? 'success' : 'info'"
+                  @click="pickIssue(item)"
+                >
+                  第 {{ item.issue }} 期<template v-if="item.volume"> · Vol.{{ item.volume }}</template>
+                  <template v-if="item.published_at"> · {{ item.published_at }}</template>
+                </el-tag>
+              </div>
+              <p v-else-if="probed" class="text-xs text-slate-400">
+                {{ probeHint }}
+              </p>
+            </div>
+          </el-form-item>
 
           <el-form-item class="!mb-0">
             <el-button
@@ -78,6 +137,7 @@
               size="large"
               class="w-full rounded-2xl border-0 bg-slate-950 text-white shadow-[0_18px_50px_-22px_rgba(15,23,42,0.7)] hover:bg-slate-800"
               :loading="crawlerStore.submitting"
+              :disabled="!canSubmit"
               @click="submitTask"
             >
               发起采集
@@ -135,48 +195,71 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useCrawlerStore } from '@/stores/crawler'
+import { getJournals, getSources, probeJournalIssues } from '@/api/journal'
 
+const route = useRoute()
 const crawlerStore = useCrawlerStore()
 const tasks = ref([])
 const rawIssues = ref([])
 const lastResult = ref(null)
 const loadError = ref('')
 
+const journals = ref([])
+const sources = ref([])
+const probing = ref(false)
+const probed = ref(false)
+const probeIssuesList = ref([])
+
 const form = reactive({
-  source_type: 'foreign',
-  journal_name: 'Information Processing & Management',
-  year: 2024,
-  issue: '6'
+  source_type: '',
+  journal_name: '',
+  year: new Date().getFullYear(),
+  issue: ''
 })
 
-const sourceOptions = [
-  { label: '国外期刊', value: 'foreign' },
-  { label: '国内期刊', value: 'domestic' }
-]
-
-const defaultJournals = {
-  foreign: ['Information Processing & Management'],
-  domestic: ['情报学报', '图书情报工作', '情报理论与实践']
-}
-
-const allJournalsBySource = computed(() => {
-  const grouped = { foreign: new Set(defaultJournals.foreign), domestic: new Set(defaultJournals.domestic) }
-  for (const item of Array.isArray(tasks.value) ? tasks.value : []) {
-    if (item?.source_type && item?.journal_name && grouped[item.source_type]) grouped[item.source_type].add(item.journal_name)
-  }
-  for (const item of Array.isArray(rawIssues.value) ? rawIssues.value : []) {
-    if (item?.source_type && item?.journal_name && grouped[item.source_type]) grouped[item.source_type].add(item.journal_name)
-  }
-  return {
-    foreign: Array.from(grouped.foreign).sort((a, b) => a.localeCompare(b)),
-    domestic: Array.from(grouped.domestic).sort((a, b) => a.localeCompare(b))
-  }
+const sourceMap = computed(() => {
+  const map = {}
+  for (const source of sources.value) map[source.source_id] = source
+  return map
 })
 
-const filteredJournalOptions = computed(() => allJournalsBySource.value[form.source_type] || [])
+const currentJournal = computed(() => journals.value.find(item => item.name === form.journal_name) || null)
+
+/** 只允许选择该期刊已启用的源，默认源排在首位。 */
+const availableSources = computed(() =>
+  (currentJournal.value?.sources || [])
+    .filter(source => source.enabled)
+    .map(source => ({
+      ...source,
+      display_name: sourceMap.value[source.source_id]?.display_name || source.source_id
+    }))
+    .sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)))
+)
+
+const currentSourceMeta = computed(() => sourceMap.value[form.source_type] || null)
+
+const journalHint = computed(() => {
+  if (!form.journal_name) return ''
+  if (!availableSources.value.length) return '该期刊未配置可用采集源，请先在「期刊与采集源」中启用并测试。'
+  return ''
+})
+
+const canSubmit = computed(() => Boolean(form.journal_name && form.source_type && form.issue) && !journalHint.value)
+
+const canProbeIssues = computed(() =>
+  Boolean(currentJournal.value && form.source_type && form.year && currentSourceMeta.value?.capabilities?.list_issues)
+)
+
+const probeHint = computed(() => {
+  if (!form.journal_name || !form.source_type) return '先选择期刊与采集源'
+  if (!currentSourceMeta.value?.capabilities?.list_issues) return '该采集源不支持列期号，请手工填写期号'
+  if (probed.value && !probeIssuesList.value.length) return '未探测到可用期号，请手工填写'
+  return ''
+})
 
 const sortedTasks = computed(() => {
   return [...(Array.isArray(tasks.value) ? tasks.value : [])].sort((a, b) => {
@@ -191,10 +274,11 @@ const taskCards = computed(() =>
   sortedTasks.value.map((task, index) => {
     const statusRaw = task?.status || task?.task_status || task?.state || 'unknown'
     const errorMessage = task?.error_message || task?.errorMessage || ''
+    const sourceId = task?.source_type || task?.sourceType || '-'
     return {
       key: task?.id ?? task?.task_id ?? `task-${index}`,
       journalName: task?.journal_name || task?.journalName || task?.journal || '未命名期刊',
-      sourceType: task?.source_type || task?.sourceType || '-',
+      sourceType: sourceMap.value[sourceId]?.display_name || sourceId,
       year: task?.year ?? '-',
       issue: task?.issue ?? '-',
       errorMessage,
@@ -203,20 +287,40 @@ const taskCards = computed(() =>
   })
 )
 
-watch(
-  () => form.source_type,
-  sourceType => {
-    const options = allJournalsBySource.value[sourceType] || []
-    if (!options.includes(form.journal_name)) form.journal_name = options[0] || ''
-  },
-  { immediate: true }
-)
-
 function statusType(status) {
   if (status === 'completed') return 'success'
   if (status === 'running') return 'warning'
   if (status === 'failed') return 'danger'
   return 'info'
+}
+
+function resetProbe() {
+  probed.value = false
+  probeIssuesList.value = []
+}
+
+function handleJournalChange() {
+  const preferred = availableSources.value.find(source => source.is_default) || availableSources.value[0]
+  form.source_type = preferred?.source_id || ''
+  resetProbe()
+}
+
+function pickIssue(item) {
+  form.issue = String(item.issue)
+}
+
+async function probeIssues() {
+  probing.value = true
+  try {
+    const payload = await probeJournalIssues(currentJournal.value.id, form.source_type, form.year)
+    probeIssuesList.value = Array.isArray(payload?.issues) ? payload.issues : []
+    probed.value = true
+    if (!probeIssuesList.value.length) ElMessage.warning('未探测到该年份的期号，请手工填写')
+  } catch (error) {
+    ElMessage.error(`探测期号失败：${error.message}`)
+  } finally {
+    probing.value = false
+  }
 }
 
 function unwrapApiPayload(payload) {
@@ -265,9 +369,35 @@ async function loadTaskData() {
   loadError.value = '采集任务台加载失败，请稍后重试或检查后端服务。'
 }
 
+async function loadJournalOptions() {
+  try {
+    const [sourceList, journalList] = await Promise.all([getSources(), getJournals()])
+    sources.value = Array.isArray(sourceList) ? sourceList : []
+    journals.value = Array.isArray(journalList) ? journalList : []
+
+    const requested = route.query.journal
+    const target = journals.value.find(item => item.name === requested) || journals.value[0]
+    if (target) {
+      form.journal_name = target.name
+      const enabled = (target.sources || []).filter(source => source.enabled)
+      const preferred = enabled.find(source => source.source_id === route.query.source)
+        || enabled.find(source => source.is_default)
+        || enabled[0]
+      form.source_type = preferred?.source_id || ''
+    }
+  } catch (error) {
+    loadError.value = `采集源配置加载失败：${error.message}`
+  }
+}
+
 async function submitTask() {
   try {
-    lastResult.value = await crawlerStore.createTask({ ...form })
+    lastResult.value = await crawlerStore.createTask({
+      source_type: form.source_type,
+      journal_name: form.journal_name,
+      year: form.year,
+      issue: String(form.issue)
+    })
     ElMessage.success('采集任务完成并已写入原始数据库')
     await loadTaskData()
   } catch (error) {
@@ -276,6 +406,7 @@ async function submitTask() {
 }
 
 onMounted(async () => {
+  await loadJournalOptions()
   await loadTaskData()
   setTimeout(() => {
     loadTaskData().catch(() => {})

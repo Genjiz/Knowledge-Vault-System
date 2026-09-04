@@ -17,7 +17,7 @@
           <p class="text-xs uppercase tracking-[0.35em] text-slate-500">Issue Workspace</p>
           <h2 class="text-3xl font-black tracking-tight text-slate-950">{{ issue?.journal_name || '-' }}</h2>
           <p class="text-sm text-slate-600">
-            {{ issue?.year }} / 第{{ issue?.issue }}期 · {{ sourceLabel }}
+            {{ issue?.year }} / 第{{ issue?.issue }}期{{ issue?.volume ? ` · Vol.${issue.volume}` : '' }}
           </p>
         </div>
         <div class="flex justify-start lg:justify-end">
@@ -34,9 +34,9 @@
     <el-card class="rounded-[28px] border border-slate-200/80 !shadow-[0_24px_64px_-36px_rgba(15,23,42,0.28)]">
       <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
         <div class="flex flex-wrap gap-3">
-          <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">
-            <span class="text-slate-400">来源</span>
-            <span class="font-semibold text-slate-900">{{ sourceLabel }}</span>
+          <div v-if="issue?.source_type" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">
+            <span class="text-slate-400">采集源</span>
+            <span class="font-semibold text-slate-900">{{ issue.source_type }}</span>
           </div>
           <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">
             <span class="text-slate-400">论文数</span>
@@ -190,8 +190,8 @@ const activeTab = ref(route.query.tab === 'analysis' ? 'analysis' : 'papers')
 const translating = ref(false)
 const analyzing = ref(false)
 
-const sourceLabel = computed(() => (issue.value?.source_type === 'domestic' ? '国内期刊' : '国外期刊'))
-const isDomestic = computed(() => issue.value?.source_type === 'domestic')
+// 区域决定翻译相关 UI 的显隐：国内期刊题录本就是中文，无需翻译
+const isDomestic = computed(() => issue.value?.region === 'domestic')
 const issueTranslationStatusLabel = computed(() => {
   if (isDomestic.value) return '不需要'
   return issue.value?.translation_status === 'completed' ? '已完成' : '未完成'

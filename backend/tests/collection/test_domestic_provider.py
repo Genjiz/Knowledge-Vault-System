@@ -35,7 +35,8 @@ class DomesticProviderContractTestCase(unittest.TestCase):
         provider = NcpssdSource(crawler_factory=FakeCrawler)
         payload = provider.fetch_issue("图书情报知识", 2024, 6)
 
-        self.assertEqual(payload["issue"]["source_type"], "domestic")
+        self.assertEqual(payload["issue"]["source_type"], "ncpssd")
+        self.assertEqual(payload["issue"]["region"], "domestic")
         self.assertEqual(payload["issue"]["journal_name"], "图书情报知识")
         self.assertEqual(payload["issue"]["issue"], "6")
         self.assertEqual(payload["issue"]["source_url"], "https://example.com/issue")

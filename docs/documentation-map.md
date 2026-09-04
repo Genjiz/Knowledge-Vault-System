@@ -43,6 +43,8 @@
 │  ├─ decisions/
 │  ├─ lessons/
 │  └─ plans/
+├─ desktop.py
+├─ desktop.bat
 ├─ start.bat
 ├─ stop.bat
 ├─ README.md

@@ -56,7 +56,8 @@ class ForeignProviderContractTestCase(unittest.TestCase):
 
         payload = provider.fetch_issue("Information Processing & Management", 2024, "6")
 
-        self.assertEqual(payload["issue"]["source_type"], "foreign")
+        self.assertEqual(payload["issue"]["source_type"], "elsevier")
+        self.assertEqual(payload["issue"]["region"], "foreign")
         self.assertEqual(payload["issue"]["volume"], "60")
         self.assertEqual(payload["issue"]["issue"], "6")
         self.assertEqual(

@@ -6,7 +6,9 @@ class CrawlTask(BaseModel):
     __tablename__ = "crawl_task"
 
     task_type = db.Column(db.String(50), nullable=False)
+    # source_type 存真实采集源 id（ncpssd/magtech/elsevier）；region 是区域类别
     source_type = db.Column(db.String(50), nullable=False)
+    region = db.Column(db.String(20))
     journal_name = db.Column(db.String(255), nullable=False)
     year = db.Column(db.Integer, nullable=False)
     issue = db.Column(db.String(50), nullable=False)
@@ -30,6 +32,7 @@ class CrawlTask(BaseModel):
             {
                 "task_type": self.task_type,
                 "source_type": self.source_type,
+                "region": self.region,
                 "journal_name": self.journal_name,
                 "year": self.year,
                 "issue": self.issue,

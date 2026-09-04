@@ -7,11 +7,24 @@ import sys
 
 import requests
 
-from app.collection.sources.base import ProviderError
+from app.collection.sources.base import ProviderError, SourceAdapter, check_result
 from app.collection.runtime.paths import find_chrome_executable, get_browser_data_root, get_legacy_crawler_root
 
 
-class ElsevierSource:
+class ElsevierSource(SourceAdapter):
+    """ScienceDirect（Elsevier）采集源（包装 legacy 抓取脚本）。"""
+
+    source_id = "elsevier"
+    display_name = "Elsevier"
+    region = "foreign"
+    capabilities = {
+        "list_issues": False,
+        "download_pdf": False,
+        "needs_browser": True,
+    }
+    # 期刊 slug 由 legacy/foreign/config_foreign.py 的 JOURNAL_SLUGS 映射解析
+    config_fields = []
+
     def __init__(
         self,
         mapper_factory=None,
@@ -154,6 +167,30 @@ class ElsevierSource:
                 f" status={response.status_code}"
             )
 
+    def test_connection(self, **kwargs):
+        """校验期刊 slug 是否已配置，并预检站点可达性。"""
+        journal_name = kwargs.get("journal_name")
+        try:
+            journal_slugs, _ = self._get_config()
+        except Exception as exc:  # legacy 配置读取失败属于确定性问题，按失败回报
+            return check_result("failed", f"读取 Elsevier 期刊配置失败：{exc}")
+
+        if journal_name and not journal_slugs.get(journal_name):
+            return check_result(
+                "warn",
+                f"未配置《{journal_name}》的期刊 slug：需在 legacy/foreign/config_foreign.py "
+                "的 JOURNAL_SLUGS 中补充后采集。",
+            )
+
+        try:
+            self._network_precheck()
+        except ProviderError as exc:
+            return check_result("failed", str(exc))
+
+        if journal_name:
+            return check_result("ok", f"站点可达，《{journal_name}》slug 已配置")
+        return check_result("ok", "站点可达")
+
     def fetch_issue(self, journal_name, year, issue):
         journal_slugs, base_url = self._get_config()
         slug = journal_slugs.get(journal_name)
@@ -193,7 +230,8 @@ class ElsevierSource:
 
         return {
             "issue": {
-                "source_type": "foreign",
+                "source_type": self.source_id,
+                "region": self.region,
                 "journal_name": journal_name,
                 "journal_slug": slug,
                 "year": year,

@@ -6,13 +6,24 @@
 from app.papers.services.paper_service import keywords_to_text, PaperService
 
 
+_REGION_LANGUAGE = {"domestic": "zh", "foreign": "en"}
+# 兼容 region 尚未回填的历史行：按真实源 id 推断
+_SOURCE_REGION = {"ncpssd": "domestic", "magtech": "domestic", "elsevier": "foreign"}
+
+
+def _resolve_language(raw_issue):
+    region = (raw_issue.region or "").lower() or _SOURCE_REGION.get(
+        (raw_issue.source_type or "").lower(), ""
+    )
+    return _REGION_LANGUAGE.get(region, "en")
+
+
 class PaperMergeService:
     def __init__(self, paper_service=None):
         self.paper_service = paper_service or PaperService()
 
     def upsert_raw_paper(self, raw_paper):
         raw_issue = raw_paper.raw_issue
-        language = "zh" if (raw_issue.source_type or "").lower() == "domestic" else "en"
 
         return self.paper_service.upsert_literature(
             {
@@ -23,8 +34,9 @@ class PaperMergeService:
                 "issue": raw_issue.issue,
                 "abstract": raw_paper.abstract,
                 "pages": raw_paper.pages,
+                "doi": raw_paper.doi,
                 "url": raw_paper.detail_url,
-                "language": language,
+                "language": _resolve_language(raw_issue),
                 "source": "collection",
                 "source_raw_paper_id": raw_paper.id,
                 "keywords": keywords_to_text(raw_paper.keywords_json),

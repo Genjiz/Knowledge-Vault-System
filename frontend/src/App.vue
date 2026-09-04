@@ -40,6 +40,10 @@
         <div class="mx-3 my-4 border-t border-slate-200/70"></div>
 
         <div class="mb-2 px-3 text-[11px] uppercase tracking-[0.28em] text-slate-400">Collection</div>
+        <el-menu-item index="/crawler/journals" class="mb-1 rounded-2xl">
+          <el-icon><Collection /></el-icon>
+          <span>期刊与采集源</span>
+        </el-menu-item>
         <el-menu-item index="/crawler/tasks" class="mb-1 rounded-2xl">
           <el-icon><Files /></el-icon>
           <span>采集任务台</span>
@@ -91,6 +95,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
+  Collection,
   DataAnalysis,
   Document,
   Download,

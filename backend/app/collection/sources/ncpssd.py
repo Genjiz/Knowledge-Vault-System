@@ -7,11 +7,27 @@ import sys
 
 import requests
 
-from app.collection.sources.base import ProviderError
+from app.collection.sources.base import ProviderError, SourceAdapter, check_result
 from app.collection.runtime.paths import get_legacy_crawler_root
 
+# 期刊定位参数缓存由 legacy 抓取脚本维护，测试连接时据此判断期刊是否被收录
+JOURNAL_URL_CACHE_NAME = "journal_url_cache.json"
 
-class NcpssdSource:
+
+class NcpssdSource(SourceAdapter):
+    """国家哲学社会科学文献中心采集源（包装 legacy 抓取脚本）。"""
+
+    source_id = "ncpssd"
+    display_name = "国家哲社文献中心"
+    region = "domestic"
+    capabilities = {
+        "list_issues": False,
+        "download_pdf": False,
+        "needs_browser": True,
+    }
+    # 期刊定位参数由 legacy/domestic/journal_url_cache.json 缓存解析，无需用户配置
+    config_fields = []
+
     def __init__(self, crawler_factory=None, enable_network_precheck=None, precheck_timeout=8):
         self._crawler_factory = crawler_factory
         self._default_script_path = None
@@ -65,6 +81,37 @@ class NcpssdSource:
                 f" status={response.status_code}"
             )
 
+    def test_connection(self, **kwargs):
+        """校验期刊定位参数是否已缓存，并预检站点可达性。
+
+        期刊未收录时定位参数缺失，采集必然失败，因此这里给出 warn 而非 ok，
+        让用户先补参数再发起采集。
+        """
+        journal_name = kwargs.get("journal_name")
+        if journal_name and not self._cached_journal_param(journal_name):
+            return check_result(
+                "warn",
+                f"NCPSSD 未收录《{journal_name}》：{JOURNAL_URL_CACHE_NAME} 中没有该期刊的"
+                "定位参数，需先补参数再采集。",
+            )
+
+        try:
+            self._network_precheck()
+        except ProviderError as exc:
+            return check_result("failed", str(exc))
+
+        if journal_name:
+            return check_result("ok", f"站点可达，《{journal_name}》已收录，定位参数已缓存")
+        return check_result("ok", "站点可达")
+
+    def _cached_journal_param(self, journal_name):
+        cache_path = Path(get_legacy_crawler_root()) / "domestic" / JOURNAL_URL_CACHE_NAME
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return cache.get(journal_name)
+
     def fetch_issue(self, journal_name, year, issue):
         self._network_precheck()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -95,7 +142,8 @@ class NcpssdSource:
 
         return {
             "issue": {
-                "source_type": "domestic",
+                "source_type": self.source_id,
+                "region": self.region,
                 "journal_name": result["journal_name"],
                 "journal_slug": result["journal_name"],
                 "year": result["year"],

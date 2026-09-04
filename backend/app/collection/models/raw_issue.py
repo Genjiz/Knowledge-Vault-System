@@ -14,7 +14,10 @@ class RawIssue(BaseModel):
         ),
     )
 
+    # source_type 存真实采集源 id（ncpssd/magtech/elsevier），参与期号唯一键；
+    # region 是区域类别（domestic/foreign），供语言推断与前端分组
     source_type = db.Column(db.String(50), nullable=False)
+    region = db.Column(db.String(20))
     journal_name = db.Column(db.String(255), nullable=False)
     journal_slug = db.Column(db.String(255))
     year = db.Column(db.Integer, nullable=False)
@@ -48,6 +51,7 @@ class RawIssue(BaseModel):
         data.update(
             {
                 "source_type": self.source_type,
+                "region": self.region,
                 "journal_name": self.journal_name,
                 "journal_slug": self.journal_slug,
                 "year": self.year,

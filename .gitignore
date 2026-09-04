@@ -9,6 +9,9 @@
 .pip-cache/
 .crawler-browser-profile/
 
+# 桌面启动器运行时数据（端口记录、进程日志）
+.runtime/
+
 # 依赖目录与运行数据按用户确认随私有仓库提交（.venv、frontend/node_modules、backend/data/）
 # .venv 与 node_modules 的实际首次入库将在用户确认后单独执行（大提交）
 

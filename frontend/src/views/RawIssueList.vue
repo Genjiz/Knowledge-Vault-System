@@ -77,13 +77,6 @@
                   >
                     {{ data.type === 'journal' ? data.journal_name : `${data.year} 年` }}
                   </div>
-                  <div
-                    v-if="data.type === 'journal'"
-                    class="mt-0.5 text-[11px]"
-                    :class="data.source_type === 'domestic' ? 'text-cyan-700' : 'text-violet-700'"
-                  >
-                    {{ data.source_type === 'domestic' ? '国内期刊' : '国外期刊' }}
-                  </div>
                 </div>
                 <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                   {{ data.issue_count }}
@@ -120,11 +113,8 @@
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
                     <div class="line-clamp-1 text-sm font-semibold text-slate-900">{{ issue.journal_name }}</div>
-                    <div class="mt-1 text-xs text-slate-500">{{ issue.year }} 年 · 第 {{ issue.issue }} 期</div>
+                    <div class="mt-1 text-xs text-slate-500">{{ issue.year }} 年 · 第 {{ issue.issue }} 期 · {{ sourceLabel(issue) }}</div>
                   </div>
-                  <el-tag class="status-chip" :class="issue.source_type === 'domestic' ? 'status-chip--source-domestic' : 'status-chip--source-foreign'" round>
-                    {{ issue.source_type === 'domestic' ? '国内' : '国外' }}
-                  </el-tag>
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-2">
@@ -182,7 +172,7 @@ const filteredIssues = computed(() => {
   const source = sourceFilter.value
   const base = source === 'all'
     ? issues.value
-    : issues.value.filter(item => item.source_type === source)
+    : issues.value.filter(item => item.region === source)
   return [...base].sort((a, b) => {
     if (a.journal_name !== b.journal_name) {
       return String(a.journal_name || '').localeCompare(String(b.journal_name || ''), 'zh-Hans-CN')
@@ -192,22 +182,21 @@ const filteredIssues = computed(() => {
 })
 
 const groupedJournals = computed(() => {
+  // 同一期刊可能在多个采集源下有期号，这里按期刊名归并为一棵子树
   const journalMap = new Map()
   filteredIssues.value.forEach(issue => {
-    const sourceType = issue.source_type || 'unknown'
     const journalName = issue.journal_name || '未命名期刊'
-    const journalKey = `${sourceType}::${journalName}`
-    if (!journalMap.has(journalKey)) {
-      journalMap.set(journalKey, {
-        key: journalKey,
-        source_type: sourceType,
+    if (!journalMap.has(journalName)) {
+      journalMap.set(journalName, {
+        key: journalName,
+        region: issue.region || '',
         journal_name: journalName,
         issues: [],
         yearMap: new Map()
       })
     }
 
-    const journalEntry = journalMap.get(journalKey)
+    const journalEntry = journalMap.get(journalName)
     journalEntry.issues.push(issue)
 
     const yearKey = Number(issue.year || 0)
@@ -225,7 +214,6 @@ const groupedJournals = computed(() => {
           id: `year:${entry.key}:${year}`,
           type: 'year',
           year,
-          source_type: entry.source_type,
           journal_name: entry.journal_name,
           issue_count: yearIssues.length,
           issues: [...yearIssues].sort(sortIssuesByPeriod),
@@ -235,19 +223,14 @@ const groupedJournals = computed(() => {
       return {
         id: `journal:${entry.key}`,
         type: 'journal',
-        source_type: entry.source_type,
+        region: entry.region,
         journal_name: entry.journal_name,
         issue_count: entry.issues.length,
         issues: [...entry.issues].sort(sortIssuesByPeriod),
         children: years
       }
     })
-    .sort((a, b) => {
-      if (a.source_type !== b.source_type) {
-        return a.source_type.localeCompare(b.source_type)
-      }
-      return a.journal_name.localeCompare(b.journal_name, 'zh-Hans-CN')
-    })
+    .sort((a, b) => a.journal_name.localeCompare(b.journal_name, 'zh-Hans-CN'))
 })
 
 const treeData = computed(() => groupedJournals.value)
@@ -266,12 +249,17 @@ const selectedTitle = computed(() => {
 
 const selectedSubtitle = computed(() => {
   if (!selectedNode.value) return ''
-  const sourceText = selectedNode.value.source_type === 'domestic' ? '国内期刊' : '国外期刊'
   if (selectedNode.value.type === 'journal') {
-    return `${sourceText} · 共 ${selectedIssues.value.length} 期`
+    return `共 ${selectedIssues.value.length} 期`
   }
-  return `${sourceText} · 该年份共 ${selectedIssues.value.length} 期`
+  return `该年份共 ${selectedIssues.value.length} 期`
 })
+
+function sourceLabel(issue) {
+  if (issue?.region === 'domestic') return '国内'
+  if (issue?.region === 'foreign') return '国外'
+  return ''
+}
 
 function findNodeById(nodes, id) {
   for (const node of nodes) {
@@ -290,12 +278,12 @@ function handleNodeClick(data) {
 }
 
 function translationStatusLabel(issue) {
-  if (issue?.source_type === 'domestic') return '不需要'
+  if (issue?.region === 'domestic') return '不需要'
   return issue?.translation_status === 'completed' ? '已完成' : '未完成'
 }
 
 function translationTagClass(issue) {
-  if (issue?.source_type === 'domestic') return 'status-chip--translation-na'
+  if (issue?.region === 'domestic') return 'status-chip--translation-na'
   return issue?.translation_status === 'completed'
     ? 'status-chip--translation-done'
     : 'status-chip--translation-pending'
@@ -347,18 +335,6 @@ onMounted(async () => {
 .status-chip {
   border: 1px solid transparent;
   font-weight: 600;
-}
-
-.status-chip--source-domestic {
-  border-color: rgba(14, 116, 144, 0.28);
-  background: rgba(103, 232, 249, 0.2);
-  color: rgb(12, 74, 110);
-}
-
-.status-chip--source-foreign {
-  border-color: rgba(109, 40, 217, 0.28);
-  background: rgba(196, 181, 253, 0.2);
-  color: rgb(91, 33, 182);
 }
 
 .status-chip--translation-na {

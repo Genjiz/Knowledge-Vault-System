@@ -53,32 +53,55 @@ class JournalApiTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
 
-    def test_update_journal_source_config(self):
+    def test_create_journal_with_region(self):
+        response = self.client.post(
+            "/api/journals",
+            json={"name": "Information Processing & Management", "region": "foreign"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["region"], "foreign")
+
+    def test_create_journal_rejects_invalid_region(self):
+        response = self.client.post("/api/journals", json={"name": "某期刊", "region": "european"})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_journal_region(self):
+        create_response = self.client.post("/api/journals", json={"name": "情报学报"})
+        journal_id = create_response.get_json()["data"]["id"]
+
+        response = self.client.put(f"/api/journals/{journal_id}", json={"region": "domestic"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["region"], "domestic")
+
+    def test_replace_journal_sources(self):
         create_response = self.client.post("/api/journals", json={"name": "情报学报"})
         journal_id = create_response.get_json()["data"]["id"]
 
         response = self.client.put(
             f"/api/journals/{journal_id}/sources",
-            json={"source_id": "ncpssd", "enabled": True},
+            json={"sources": [{"source_id": "ncpssd", "enabled": True}]},
         )
 
         self.assertEqual(response.status_code, 200)
-        payload = response.get_json()["data"]
-        self.assertEqual(payload["source_id"], "ncpssd")
-        self.assertTrue(payload["enabled"])
+        sources = response.get_json()["data"]["sources"]
+        self.assertEqual(sources[0]["source_id"], "ncpssd")
+        self.assertTrue(sources[0]["enabled"])
 
         list_response = self.client.get("/api/journals")
         journals = list_response.get_json()["data"]
         self.assertEqual(len(journals[0]["sources"]), 1)
         self.assertEqual(journals[0]["sources"][0]["source_id"], "ncpssd")
 
-    def test_update_journal_source_rejects_unknown_source(self):
+    def test_replace_journal_sources_rejects_unknown_source(self):
         create_response = self.client.post("/api/journals", json={"name": "情报学报"})
         journal_id = create_response.get_json()["data"]["id"]
 
         response = self.client.put(
             f"/api/journals/{journal_id}/sources",
-            json={"source_id": "not-a-source"},
+            json={"sources": [{"source_id": "not-a-source"}]},
         )
 
         self.assertEqual(response.status_code, 400)

@@ -52,6 +52,11 @@ const routes = [
     component: () => import('@/views/Backup.vue')
   },
   {
+    path: '/crawler/journals',
+    name: 'JournalSources',
+    component: () => import('@/views/JournalSources.vue')
+  },
+  {
     path: '/crawler/tasks',
     name: 'CrawlTaskCenter',
     component: () => import('@/views/CrawlTaskCenter.vue')

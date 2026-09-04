@@ -14,6 +14,7 @@ class RawPaper(BaseModel):
     abstract_zh = db.Column(db.Text)
     keywords_json = db.Column(db.Text)
     pages = db.Column(db.String(100))
+    doi = db.Column(db.String(100))
     detail_url = db.Column(db.String(1000))
     published_at = db.Column(db.String(100))
     sort_index = db.Column(db.Integer, nullable=False, default=0)
@@ -35,6 +36,7 @@ class RawPaper(BaseModel):
                 "abstract_zh": self.abstract_zh,
                 "keywords_json": self.keywords_json,
                 "pages": self.pages,
+                "doi": self.doi,
                 "detail_url": self.detail_url,
                 "published_at": self.published_at,
                 "sort_index": self.sort_index,

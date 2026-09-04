@@ -1,0 +1,390 @@
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><HTML>
+<HEAD>
+	<TITLE>情报学报</TITLE>
+	<META http-equiv=Content-Type content="text/html; charset=UTF-8">
+	<link href="../../images/css.css" type="text/css" rel="stylesheet">
+	<META content="MSHTML 6.00.2900.3157" name=GENERATOR>
+	<SCRIPT language=javascript src="../../images/OPENWIN.JS"></SCRIPT>
+	<SCRIPT language=javascript>
+		function clearall()
+		{
+			var the_box = window.document.all('pid');
+			for(var i=0;i< the_box.length;i++)
+			{
+				the_box[i].checked = false;
+			}
+		}
+		
+		function isready1(form)
+		{
+			var blnAlert = 0;
+			var str_article = "";
+			if (typeof(AbstractList.pid.length)=="undefined") 
+			{  
+				if(AbstractList.pid.checked==true)
+				{
+					blnAlert = blnAlert+1;
+					str_article = str_article + AbstractList.pid.value+"|";
+				}
+			} 
+			else 
+			{
+				for (i=0;i<AbstractList.pid.length;i++) 
+				{
+			  	if(AbstractList.item("pid",i).checked==true)
+			  	{  
+						blnAlert = blnAlert+1;
+						str_article = str_article + AbstractList.item("pid",i).value+"|";
+					}
+			  } 
+			}
+			if (blnAlert==0)
+			{
+				alert("请您先选中文章！");
+				return  false;
+			}
+			//alert(str_article);
+			form.action="uniteZhaiYao.do?uniteId="+str_article;
+			form.submit;
+		}
+		
+		function set_abs()
+		{
+			abst.style.display = "block";
+		}
+		
+		function showArticleFile(attachType,articleId)
+		{
+			var viewAttach = "showArticleFile.do?attachType="+attachType+"&objID="+articleId;
+			window.open(viewAttach,"下载文件","toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=no,resizeable=no,copyhistory=no,width=520,height=200,left=88,top=88");
+		}
+		
+		function chg(obj,order)
+		{
+		   var scnt=obj.cnt;
+		   for(i=0;i<jcnt;i++)
+		   {
+		    tobj=eval("document.all.jlist"+(i+1));
+			tobj.style.visibility="hidden";
+		   }
+		   sobj=eval("document.all.jlist"+scnt);
+		   sobj.style.visibility="visible";
+		   if(order==1) obj.style.backgroundColor="FEAE00";
+		   else obj.style.backgroundColor="";
+		}
+		
+		function chg2(obj,order)
+		{
+		   if(order==1) obj.style.backgroundColor="FEAE00";
+		   else obj.style.backgroundColor="";
+		}
+	</SCRIPT>
+</HEAD>
+
+<BODY class="wrapper">
+	<!--头部-->
+	﻿<link rel=stylesheet type="text/css" href="https://qbxb.istic.ac.cn/images/css.css">
+<!--头部-->
+<div class="top">
+    <div class="top-pic">
+     <div class="container">
+         <div>
+             <a href="https://qbxb.istic.ac.cn/CN/volumn/home.shtml">
+                 <img src="https://qbxb.istic.ac.cn/images/logo.png" alt="情报学报"/>
+                 <h1>情报学报</h1>
+             </a>
+         </div>         
+     </div>
+    </div>
+    <div class="nav">
+        <div class="container">
+        <span class="nav-bar">
+                <a href="https://qbxb.istic.ac.cn/CN/volumn/home.shtml">首页</a>
+                <a href="../../Journalx_qbxb">在线投稿</a>
+                <a href="https://qbxb.istic.ac.cn/CN/article/showNewArticle.do">最新录用</a>
+                <a href="https://qbxb.istic.ac.cn/CN/article/showAsap.do">在线出版</a>
+                <a href="https://qbxb.istic.ac.cn/CN/article/showTenYearOldVolumn.do ">过刊浏览</a>
+               
+                <!--<a href="https://qbxb.istic.ac.cn/EN/volumn/home.shtml">English</a>-->
+        </span>
+        <span class="search">
+            <form action="https://qbxb.istic.ac.cn/CN/article/searchArticle.do">
+               <span class="search-bg">
+                 <input type="text"  maxlength="30" name="ks_keyword" id="ks_keyword" placeholder="请输入关键字"/>
+                 <button name="Submit2" class="btn-search">GO</button>
+               </span> 
+             </form>           
+            <a href="https://qbxb.istic.ac.cn/CN/article/advSearchArticle.do" class="adv-search">高级检索</a>
+        </span>
+     </div>
+    </div>
+</div>
+
+	<!--头部END-->
+	<!--主要中间开始-->
+	<div class="main">
+			<!--左部-->
+			 <div class="main-l">
+      <ul>
+        <li><a href="../../../journalx/editorCommitteeLogOn.action" target="_blank">编委会</a></li>
+        <li><a href="../../../journalx/authorLogOn.action" target="_blank">作者投稿</a></li>
+        <li><a href="../../../journalx/expertLogOn.action" target="_blank">专家审稿</a></li>
+        <li><a href="../../../journalx/editorLogOn.action" target="_blank">编辑办公</a></li>
+        <li><a href="../../../journalx/editorInChiefLogOn.action" target="_blank">主编办公</a></li>
+        <li><a href="../article/advSearchArticle.do">论文检索</a></li>
+        <li><a href="../article/showTenYearOldVolumn.do">过刊浏览</a></li>
+        <li><a href="../article/showDownloadTopList.do">下载排行</a></li>
+      </ul>
+      <div class="info">
+        <p><span>主办</span>中国残疾人康复协会</p>
+        <p><span></span>中国医师协会</p>
+        <p><span></span>中国康复研究中心</p>
+        <p><span>主编</span>吴弦光　李建军</p>
+        <p><span>网址</span>www.cjrtponline.com</p>
+        <p><span>地址</span>北京市丰台区角门北路10号</p>
+        <p><span></span>(100068)中国康复理论与实践</p>
+        <p><span></span>编辑部</p>
+        <p><span>电话</span>(010)67567673、87569723</p>
+        <p><span>电邮</span>cjrtponline@263.net</p>
+        <p><span>订购</span>全国各地邮局</p>
+        <p><span></span>邮发代号：82-35</p>
+        <p><span></span>国外发行代号：M-6607</p>
+      </div>
+    </div>
+			<!--左部END-->
+			<!--内容中间-->
+			<div class="main-column">
+			  		
+						<table width="900" height="156" border="0" align="center" cellspacing="0" cellpadding="0">
+							<tr>
+						
+            		<td colspan=2 class=J_WenZhang height="30" valign=bottom><a class=J_WenZhang_U href=showOldVolumn.do>图表显示</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class=J_WenZhang_U href=showTenYearOldVolumn.do>年代列表</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class=J_WenZhang_U href=showOldVolumnList.do>列表显示</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class=J_WenZhang_U href=showOldPictureList.do>封面列表</a></td>
+              </tr>
+              <tr>
+								<td height=10 colspan=3></td>
+              </tr>
+              
+              <tr>
+             
+								<td height=20 colspan=2>
+									<table width="100%" height="30"  border="0" cellpadding="5" cellspacing="1">
+										<tr>
+											
+												
+													<td width=140 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1243.shtml">
+										      		<IMG height=150 src="../../fileup/COVER/20260731115300.jpg" width=104 border=0>
+										     		</a>
+										     		<br>
+										     		2026&nbsp;Vol.45&nbsp;No.7
+									     		</td>
+												
+													<td width=140 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1242.shtml">
+										      		<IMG height=150 src="../../fileup/COVER/20260716112904.jpg" width=104 border=0>
+										     		</a>
+										     		<br>
+										     		2026&nbsp;Vol.45&nbsp;No.6
+									     		</td>
+												
+													<td width=140 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1240.shtml">
+										      		<IMG height=150 src="../../fileup/COVER/20260612133421.jpg" width=104 border=0>
+										     		</a>
+										     		<br>
+										     		2026&nbsp;Vol.45&nbsp;No.4
+									     		</td>
+												
+													<td width=140 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1241.shtml">
+										      		<IMG height=150 src="../../fileup/COVER/20260622170727.jpg" width=104 border=0>
+										     		</a>
+										     		<br>
+										     		2026&nbsp;Vol.45&nbsp;No.5
+									     		</td>
+												
+											
+											<td></td>
+										</tr>
+									</table>
+								</td>
+              </tr>
+              
+              <tr>
+								<td height=10 colspan=3></td>
+              </tr>
+              
+              <tr>
+								<td colspan="3">
+								 <hr>
+								</td>
+								
+              </tr>
+              
+            	<tr>
+            	
+              	<td valign=top>
+      						<table width="100%" height="30"  border="0" cellpadding="5" cellspacing="1">
+        						
+											
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1243.shtml">
+														2026&nbsp;Vol.45&nbsp;No.7&nbsp;
+														
+														pp.925-1082
+														&nbsp;
+														2026-07-31
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1242.shtml">
+														2026&nbsp;Vol.45&nbsp;No.6&nbsp;
+														
+														pp.777-924
+														&nbsp;
+														2026-07-15
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1240.shtml">
+														2026&nbsp;Vol.45&nbsp;No.4&nbsp;
+														
+														pp.463-616
+														&nbsp;
+														2026-06-11
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1241.shtml">
+														2026&nbsp;Vol.45&nbsp;No.5&nbsp;
+														
+														pp.617-758
+														&nbsp;
+														2026-06-22
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1238.shtml">
+														2026&nbsp;Vol.45&nbsp;No.3&nbsp;
+														
+														pp.319-462
+														&nbsp;
+														2026-04-30
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1237.shtml">
+														2026&nbsp;Vol.45&nbsp;No.2&nbsp;
+														
+														pp.165-303
+														&nbsp;
+														2026-04-03
+														</a>
+														
+													</td>
+												</tr>
+							 				
+												<tr>
+						          		<td height=20 valign=top align=left class=J_WenZhang>
+														<a class=J_WenZhang href="../volumn/volumn_1236.shtml">
+														2026&nbsp;Vol.45&nbsp;No.1&nbsp;
+														
+														pp.1-0
+														&nbsp;
+														2026-03-02
+														</a>
+														
+													</td>
+												</tr>
+							 				
+										
+							    </TABLE>    
+								</td>
+							
+							</tr>
+						</TABLE>
+						</TD>
+					</TR>
+				</TABLE>
+			</div> 
+			<!--内容中间END-->
+	</div>
+	<!--主要中间结束-->
+	<!--尾部-->
+	﻿<!--尾部-->
+<div class="footer">
+    <div class="container">
+        <div class="footer-l" >
+            <div class="footer-nav" style="width:300px">              
+                <div class="footNavLayer" style="width:300px">
+                    <ul style="width:300px">
+                        <li><a href="http://www.lis.ac.cn">图书情报工作</a></li>
+                        <li><a href="http://www.qbkx.org">情报科学 </a></li>
+                        <li><a href="http://www.itapress.cn">情报理论与实践</a></li>
+                        <li><a href="http://manu03.magtech.com.cn:81/Jweb_tsqb">图书情报知识</a></li>
+                        <li><a href="http://qbzl.ruc.edu.cn">情报资料工作</a></li>
+                        <li><a href="http://www.qbzz.org/Default.aspx">情报杂志</a></li>
+                    </ul>
+                </div>
+
+                
+               <!-- <div class="footDiv" align="center">
+                    <div class="footNav">
+                        <ul>
+                            <li><a href="#">友情链接<b></b></a></li>
+                    
+
+                        </ul>
+                    </div>
+                </div>-->
+            </div>
+            <p>Editorial Office, Journal of The China Society for Scientific and Technical Information </p>
+            <p>Beijing changfu promotes the 15th</p>
+            <p>Tel: 010-68598273 Email: <a href="qbxb@istic.ac.cn">qbxb@istic.ac.cn</a></p>
+            <p>Copyright © 2015 by the Journal of The China Society for Scientific and Technical Information</p>
+        </div>
+        <div class="footer-r">
+            <br>
+            
+            <p>本系统由<a href="http://www.magtech.com.cn">北京玛格泰克科技发展有限公司</a>设计开发</p>
+            
+           
+
+        </div>
+
+    </div>
+</div>
+<!--尾部-->
+<script type="text/javascript" src="https://qbxb.istic.ac.cn/js/jquery-1.7.1.min.js"></script>
+<script type="text/javascript" src="https://qbxb.istic.ac.cn/js/js.js"></script>
+	<!--尾部结束-->
+
+</BODY>
+
+</HTML>

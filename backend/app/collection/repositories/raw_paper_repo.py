@@ -22,6 +22,7 @@ class RawPaperRepository(BaseRepository):
                 abstract_zh=paper.get("abstract_zh"),
                 keywords_json=paper.get("keywords_json"),
                 pages=paper.get("pages"),
+                doi=paper.get("doi"),
                 detail_url=paper.get("detail_url"),
                 published_at=paper.get("published_at"),
                 sort_index=paper.get("sort_index", index),

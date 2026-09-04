@@ -72,7 +72,8 @@ class PaperMergeTestCase(unittest.TestCase):
         from app.collection.pipeline.paper_merge import PaperMergeService
 
         raw_issue, raw_paper = self._make_raw_paper(title="情报学研究进展", abstract="摘要")
-        raw_issue.source_type = "domestic"
+        raw_issue.source_type = "ncpssd"
+        raw_issue.region = "domestic"
         db.session.commit()
 
         literature = PaperMergeService().upsert_raw_paper(raw_paper)
