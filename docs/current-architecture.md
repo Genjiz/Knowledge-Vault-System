@@ -4,11 +4,11 @@
 
 ## 技术栈
 
-- 前端：Vue 3 + Vite + Vue Router + Pinia + Element Plus + ECharts + Tailwind CSS 4
+- 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router + TanStack Query + React Hook Form + Zod + Axios + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
 - 采集与 AI：requests + beautifulsoup4 + DrissionPage + google-genai
 - 桌面启动器：pystray + Pillow（根目录 `desktop.py`，仅 Windows 使用）
-- 后端环境：仓库根目录 `.venv`（Python 3.11+）；前端依赖经 npm 安装
+- 后端环境：仓库根目录 `.venv`（Python 3.11+）；前端使用 Node.js `^20.19.0` 或 `>=22.12.0`，依赖经 npm 安装
 
 ## 后端结构
 
@@ -68,14 +68,27 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 
 「测试连接」是轻量探测，不采集论文、不落临时文件：`magtech` 请求年页解析期号并回报识别结果；`ncpssd` 校验期刊定位参数是否已缓存 + 站点探活；`elsevier` 校验期刊 slug 是否已配置 + 站点探活。仅测试结果状态会写入 `journal_source_config`。
 
-## 前端页面
+## 前端结构与页面
 
-| 路由 | 页面 | 职责 |
-|---|---|---|
-| `/crawler/journals` | 期刊与采集源 | 新增/编辑期刊（含区域）、配置该期刊可用源（按区域过滤）、测试连接、查看采集统计；不发起采集 |
-| `/crawler/tasks` | 采集任务台 | 选期刊 → 选源（仅该期刊已启用源）→ 选年 → 探测期号 → 发起采集；不维护期刊与源 |
+入口为 `frontend/src/main.tsx`，应用壳与路由位于 `src/app/`。`AppShell` 提供 Workspace / Collection / Media / Utilities 四组导航；TanStack Router 保持原有 URL，并按业务域懒加载页面；TanStack Query 管理服务端数据、刷新与视频任务轮询。
 
-两页靠链接互相跳转：期刊未配置可用源时采集台禁用提交并给出跳转入口。
+- `src/api/`：Axios client、统一响应信封与错误模型、TypeScript API 合同；数组查询参数按重复 key 序列化。
+- `src/components/`：基于原生元素与 Radix primitives 的源码组件，以及按需注册模块的 ECharts 封装。
+- `src/features/`：按 dashboard、literatures、organize、utilities、collection、video 划分页面与业务逻辑。
+- 文献表单使用 React Hook Form + Zod；期号分析 Markdown 经过本地安全解析后渲染；普通笔记仍使用文本输入，不引入富文本编辑器。
+- Tailwind CSS 4 由 Vite 插件接入，组件视觉规则保留在 `src/index.css`；生产构建按业务域拆包，`scripts/check-chunk-sizes.mjs` 强制活动 JavaScript chunk 不超过 500 KiB。
+
+| 路由组 | 页面 |
+|---|---|
+| `/`、`/statistics` | 仪表盘、统计分析 |
+| `/literatures`、`/literatures/new`、`/literatures/<id>`、`/literatures/<id>/edit` | 文献列表、创建、详情与编辑 |
+| `/tags`、`/folders` | 标签与文件夹管理 |
+| `/import`、`/backup` | 导入、备份与恢复 |
+| `/crawler/journals`、`/crawler/tasks` | 期刊与采集源配置、采集任务台 |
+| `/crawler/issues`、`/crawler/issues/<id>` | 原始期号库与详情、翻译、分析 |
+| `/video-notes`、`/video-notes/tasks`、`/video-notes/tasks/<id>` | 视频任务创建、列表、状态、日志与产物 |
+
+期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。两页靠链接互相跳转，期刊未配置可用源时采集台禁用提交并给出配置入口。
 
 ## 数据与产物
 
@@ -100,7 +113,7 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 
 - 推荐入口：根目录 `desktop.bat` → 无窗口拉起 `desktop.py`（pythonw）。启动器负责：单实例检测（`.runtime/ports.json` + 健康检查）、端口分配、后台拉起前后端（`CREATE_NO_WINDOW`，日志落 `.runtime/logs/`）、轮询 `/api/health` 就绪后用系统默认浏览器打开界面、托盘常驻（打开界面/重启服务/退出），退出按进程树 `taskkill /f /t` 回收。
 - 备用入口：`start.bat` / `stop.bat`（终端窗口方式，按固定端口 kill）。
-- 端口规则：决策收口在启动器，经环境变量下发——`KV_BACKEND_PORT` → `backend/run.py`，`KV_BACKEND_PORT`/`KV_FRONTEND_PORT` → `frontend/vite.config.js`。策略为首选端口（5000/3000）+ 自动顺延；显式注入的端口被占时报错，未注入时自动顺延。`app/core/ports.py` 是端口分配的唯一实现。
+- 端口规则：决策收口在启动器，经环境变量下发——`KV_BACKEND_PORT` → `backend/run.py`，`KV_BACKEND_PORT`/`KV_FRONTEND_PORT` → `frontend/vite.config.ts`。策略为首选端口（5000/3000）+ 自动顺延；显式注入的端口被占时报错，未注入时自动顺延。`app/core/ports.py` 是端口分配的唯一实现。
 - 后端默认关闭 Flask 调试 reloader（`FLASK_DEBUG=1` 可开启）；Vite 显式绑定 `127.0.0.1`，启动器注入端口时启用 `strictPort`。
 - 端口记录与进程日志位于 `.runtime/`（不提交），退出后删除端口记录文件。
 
@@ -120,4 +133,6 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 
 ## 测试组织
 
-`backend/tests/` 按包归位：`core/`（路径、任务执行器、bootstrap、health、gemini）、`papers/`（模型、合并、文献 API）、`collection/`（采集各服务/源/工作流、期刊与源 API、能力声明与注册表、播种）、`video_notes/`（视频模块）。测试临时目录统一在 OS 临时目录 `knowledge-vault-tests/` 下（规避 safe-delete 守卫，见 lessons L-004）。外部服务（Gemini、真实站点、浏览器）调用一律用 mock / fixture 离线覆盖（遵循 `AGENTS.md` 7.2）；确需真实调用时，把 `DATA_ROOT` 重定向到临时库副本再验证，不写正式运行数据（见 lessons L-011）。全量套件 150 个测试。
+`backend/tests/` 按包归位：`core/`（路径、任务执行器、bootstrap、health、gemini）、`papers/`（模型、合并、文献 API）、`collection/`（采集各服务/源/工作流、期刊与源 API、能力声明与注册表、播种）、`video_notes/`（视频模块）。测试临时目录统一在 OS 临时目录 `knowledge-vault-tests/` 下（规避 safe-delete 守卫，见 lessons L-004）。外部服务（Gemini、真实站点、浏览器）调用一律用 mock / fixture 离线覆盖（遵循 `AGENTS.md` 7.2）；确需真实调用时，把 `DATA_ROOT` 重定向到临时库副本再验证，不写正式运行数据（见 lessons L-011）。全量套件 155 个测试。
+
+前端使用 Vitest 做纯逻辑测试（EndNote 解析、安全 Markdown、文献表单规范化），当前 3 个文件共 6 项；Playwright 项目级 E2E 通过网络拦截覆盖 17 条路由、筛选、详情跳转、表单校验/创建和移动端溢出，共 4 项。真实数据浏览器验收另行连接 Flask，避免自动化测试修改正式数据库或调用外部服务。

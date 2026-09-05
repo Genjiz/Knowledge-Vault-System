@@ -23,7 +23,7 @@ while (queue.length > 0) {
   const content = readFileSync(join(DIST_ASSETS_DIR, fileName), 'utf8')
   const importRefs = [
     ...content.matchAll(/(?:from|import)\s*\(?["']\.\/([^"'?#]+\.js)["']\)?/g),
-    ...content.matchAll(/assets\/([^"'?#]+\.js)/g)
+    ...content.matchAll(/assets\/([^"'?#]+\.js)/g),
   ].map((match) => match[1])
 
   for (const ref of importRefs) {
@@ -36,7 +36,7 @@ while (queue.length > 0) {
 const oversizedChunks = [...visited]
   .map((fileName) => ({
     fileName,
-    size: statSync(join(DIST_ASSETS_DIR, fileName)).size
+    size: statSync(join(DIST_ASSETS_DIR, fileName)).size,
   }))
   .filter((entry) => entry.size > MAX_JS_CHUNK_SIZE)
 

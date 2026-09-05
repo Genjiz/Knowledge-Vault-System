@@ -5,7 +5,7 @@
 - 操作系统：Windows
 - 项目根目录：仓库根目录（含 `backend/`、`frontend/`、`docs/`）
 - 后端 Python 环境：仓库根目录 `.venv`，解释器为 `.venv\Scripts\python.exe`，不使用 conda
-- 前端环境：Node.js 18+，依赖位于 `frontend/node_modules`
+- 前端环境：Node.js `^20.19.0` 或 `>=22.12.0`（Vite 8 要求），依赖位于 `frontend/node_modules`
 - 默认端口：后端 `5000`，前端 `3000`
 - 仓库托管于 GitHub 私有仓库，依赖目录与运行数据随仓库提交，便于跨机器直接使用
 - Gemini Key 读取优先级：环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → 根目录 `gemini_api_key.txt`

@@ -6,6 +6,14 @@
 
 把 Knowledge Vault 打造成一个服务个人研究与知识工作的长期系统，而不是只做一个"文献管理器"。
 
+## 前端技术基础（2026-09-05 确认）
+
+- 长期前端框架采用 React + TypeScript + Vite，不使用 Vue 或 Next.js。
+- 路由与服务端状态分别采用 TanStack Router、TanStack Query；表单采用 React Hook Form + Zod；HTTP 继续通过 Axios 对接独立 Flask API。
+- UI 采用 Tailwind CSS 4 与可维护的源码组件，保留 ECharts；质量体系包含 ESLint、Prettier、Vitest / React Testing Library 和 Playwright。
+- 保持前后端分离、浏览器 URL、桌面托盘启动方式和动态端口编排，前端技术演进不主动改变 Flask API 合同。
+- 普通笔记继续使用文本输入；只有明确出现富文本编辑需求时再评估 TipTap，不把编辑器复杂度预先引入基础架构。
+
 ## 论文与采集体系（2026-08-30 确认）
 
 ### T-1 采集源可配置

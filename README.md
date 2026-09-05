@@ -22,7 +22,7 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 
 ## 技术栈
 
-- 前端：Vue 3 + Vite + Vue Router + Pinia + Element Plus + ECharts
+- 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router / Query + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
 - 采集与 AI：requests + beautifulsoup4 + DrissionPage + google-genai
 
@@ -44,6 +44,8 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 ## 快速开始
 
 ### 1. 安装依赖
+
+前端要求 Node.js `^20.19.0` 或 `>=22.12.0`，使用 npm 与仓库内唯一锁文件 `frontend/package-lock.json`。
 
 ```powershell
 python -m venv .venv
@@ -125,6 +127,15 @@ npm run dev
 # 前端构建验证
 cd .\frontend
 npm run build
+
+# 前端完整质量检查
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+npm run build
+npm run check:chunks
+npm run format:check
 ```
 
 ## 模块入口
@@ -137,10 +148,10 @@ npm run build
 
 视频转笔记模块的任务产物会保存到：
 
-- `backend/artifacts/video-notes/<task_id>/source/`
-- `backend/artifacts/video-notes/<task_id>/transcript/`
-- `backend/artifacts/video-notes/<task_id>/notes/`
-- `backend/artifacts/video-notes/<task_id>/metadata.json`
+- `backend/data/artifacts/video-notes/<task_id>/source/`
+- `backend/data/artifacts/video-notes/<task_id>/transcript/`
+- `backend/data/artifacts/video-notes/<task_id>/notes/`
+- `backend/data/artifacts/video-notes/<task_id>/metadata.json`
 
 ## 文档入口
 

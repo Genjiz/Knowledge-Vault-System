@@ -16,6 +16,13 @@
 # .venv 与 node_modules 的实际首次入库将在用户确认后单独执行（大提交）
 
 frontend/dist/
+frontend/.playwright-cli/
+frontend/playwright-report/
+frontend/test-results/
+frontend/node_modules/.tmp/
+frontend/node_modules/.vite/
+frontend/node_modules/.vite-temp/
+frontend/node_modules/.vitest/
 
 # 密钥类文件绝对不提交
 .env

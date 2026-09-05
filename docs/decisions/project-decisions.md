@@ -137,3 +137,11 @@
 - 内容：Magtech 官网源只取中文题录：BibTeX 取作者/标题/卷期页码/关键词/DOI，EndNote（RIS）取摘要，每篇两个请求；英文标题与英文摘要不解析摘要页 HTML。
 - 理由：两类结构化导出已覆盖题录需求，解析摘要页 HTML 成本高且易碎；当前分析场景不需要英文题录。
 - 影响：官网源产出的 `title` / `abstract` 均为中文；需要英文题录时另行评估摘要页解析。
+
+## D-018 前端迁移到 React + TypeScript + Vite
+
+- 状态：已生效
+- 日期：2026-09-05
+- 内容：正式前端从 Vue 3 + JavaScript 迁移为 React 19 + TypeScript + Vite 8；使用 Tailwind CSS 4 与源码组件、TanStack Router、TanStack Query、React Hook Form + Zod、Axios、ECharts、Vitest / React Testing Library、Playwright、ESLint 和 Prettier。保持 Flask API、全部浏览器 URL、桌面托盘启动器、动态端口和主要用户行为不变；不采用 Next.js，迁移期不引入 TipTap。
+- 理由：后续功能会持续扩展，需要更严格的类型合同、稳定的路由与服务端状态边界、可测试表单和长期可维护的组件源码；项目已有独立 Flask 后端，不需要 Next.js 的服务端能力。
+- 影响：前端源码改为 `.ts` / `.tsx` 并按业务域懒加载；Vue、Pinia、Element Plus、Vue Router 与相关源码/依赖删除；Node.js 要求提升为 `^20.19.0` 或 `>=22.12.0`；活动 JavaScript chunk 继续受 500 KiB 检查约束。
