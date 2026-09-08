@@ -7,8 +7,10 @@ Knowledge Vault 是一个正在持续演进的个人知识库项目。它最初�
 ## 当前能力
 
 - 文献管理：文献条目、标签、文件夹、笔记、统计、备份
-- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Elsevier）、采集任务、原始期号与论文入库、翻译、分析、JSON/Markdown 导出
-- 视频转笔记：输入 B 站链接，自动执行音频下载、Whisper 转写和 Gemini 笔记生成
+- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Elsevier）、采集任务、原始期号与论文入库、Magtech 官网全文 PDF 补采、翻译、JSON/Markdown 导出
+- 论文分析：按单期、多期或多篇统一文献创建异步综合分析，支持运行历史与模型切换
+- 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型，并按论文分析、论文翻译、视频笔记绑定默认模型
+- 视频转笔记：输入 B 站链接，自动执行音频下载、Whisper 转写和模型笔记生成
 - 单一主项目结构：前后端与采集能力已统一到同一个仓库中维护
 
 ## 项目方向
@@ -24,7 +26,7 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 
 - 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router / Query + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
-- 采集与 AI：requests + beautifulsoup4 + DrissionPage + google-genai
+- 采集与 AI：requests + beautifulsoup4 + DrissionPage + google-genai + openai
 
 ## 仓库结构
 
@@ -68,9 +70,11 @@ cd ..
 
 数据库结构变更统一通过 Flask-Migrate 管理（`flask db migrate` + `flask db upgrade`），不再依赖 `create_all()`。
 
-### 3. 配置 Gemini Key
+### 3. 配置模型
 
-优先级如下：
+启动系统后可从侧边栏 `System → 模型配置` 新增模型档案、填写 Base URL / 模型名称 / API Key，并设置各场景默认模型。页面保存的 API Key 只写入根目录 `.env` 的 `LLM_API_KEYS_JSON`，不会进入数据库或 API 响应。
+
+系统保留原有 Gemini Key 作为兼容回退，优先级如下：
 
 1. 环境变量 `GEMINI_API_KEY`
 2. 文件 `backend/gemini_api_key.txt`
@@ -141,10 +145,12 @@ npm run format:check
 ## 模块入口
 
 - 文献管理：侧边栏 `Workspace`
+- 论文分析：侧边栏 `Workspace → 论文分析`
 - 采集中心：侧边栏 `Collection`
 - 视频转笔记：侧边栏 `Media`
+- 模型配置：侧边栏 `System`
 
-视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`）、已配置的 Gemini Key，以及可访问 Gemini API 或已在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
+视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`），并在模型配置页为视频笔记场景绑定已配置 API Key 的模型。使用 Gemini 且本机无法直连时，还需在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
 
 视频转笔记模块的任务产物会保存到：
 

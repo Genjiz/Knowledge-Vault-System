@@ -20,6 +20,7 @@ import time
 
 import requests
 
+from app.core.text import clean_title_text
 from app.collection.sources.base import ProviderError, SourceAdapter, check_result
 
 YEAR_PAGE_URL = "{base}/CN/article/showTenYearVolumnDetail.do?nian={year}"
@@ -93,7 +94,7 @@ def parse_bibtex(text):
 
     keywords = [item.strip() for item in (fields.get("keywords") or "").split(";") if item.strip()]
     return {
-        "title": fields.get("title", ""),
+        "title": clean_title_text(fields.get("title", "")),
         "authors": fields.get("author", ""),
         "journal": fields.get("journal") or fields.get("publisher", ""),
         "year": fields.get("year", ""),
@@ -142,6 +143,7 @@ class MagtechSource(SourceAdapter):
     source_id = "magtech"
     display_name = "期刊官网（Magtech）"
     region = "domestic"
+    metadata_priority = 300
     capabilities = {
         "list_issues": True,
         "download_pdf": True,
@@ -173,7 +175,7 @@ class MagtechSource(SourceAdapter):
         self._timeout = timeout
         self._max_attempts = max(1, int(max_attempts))
 
-    def _get(self, url):
+    def _request(self, url):
         session = self._session or requests
         last_error = None
         for attempt in range(1, self._max_attempts + 1):
@@ -200,11 +202,14 @@ class MagtechSource(SourceAdapter):
             response.raise_for_status()
             if self._request_interval:
                 time.sleep(self._request_interval)
-            return response.text
+            return response
 
         raise ProviderError(
             f"Magtech 请求失败，已尝试 {self._max_attempts} 次：{url} —— {last_error}"
         )
+
+    def _get(self, url):
+        return self._request(url).text
 
     def list_issues(self, journal_name, year, **kwargs):
         page_html = self._get(YEAR_PAGE_URL.format(base=self.base_url, year=year))
@@ -241,11 +246,19 @@ class MagtechSource(SourceAdapter):
         }
 
     def download_pdf(self, paper_ref, **kwargs):
-        """T-2 预留：返回 PDF 直链，实际下载与落盘由上层处理。"""
+        """下载单篇 PDF，文件校验与落盘由全文服务统一处理。"""
+        from app.collection.sources.base import PdfDownload
+
         article_id = paper_ref if isinstance(paper_ref, (str, int)) else paper_ref.get("article_id")
         if not article_id:
             raise ProviderError("下载 PDF 需要文章 id")
-        return PDF_URL.format(base=self.base_url, article_id=article_id)
+        url = PDF_URL.format(base=self.base_url, article_id=article_id)
+        response = self._request(url)
+        return PdfDownload(
+            content=response.content,
+            source_url=url,
+            content_type=response.headers.get("Content-Type"),
+        )
 
     def test_connection(self, **kwargs):
         """取回站点可识别的信息，让用户确认没有填错地址。"""
@@ -301,6 +314,7 @@ class MagtechSource(SourceAdapter):
         doi = metadata["doi"]
         return {
             "source_identifier": doi or detail_url,
+            "source_ref_json": json.dumps({"article_id": article_id}, ensure_ascii=False),
             "title": title,
             "title_zh": title,
             "authors": metadata["authors"],

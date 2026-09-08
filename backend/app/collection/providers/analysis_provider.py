@@ -2,11 +2,14 @@ import json
 
 from app.collection.legacy import config as crawler_config
 from app.collection.sources.base import ProviderError
-from app.core.llm.gemini import create_gemini_client
+from app.core.llm.service import LLMService
 
 
 class AnalysisProvider:
     model_name = "gemini"
+
+    def __init__(self, llm_service=None):
+        self.llm_service = llm_service
 
     def _format_papers_for_prompt(self, papers):
         formatted_texts = []
@@ -34,9 +37,6 @@ class AnalysisProvider:
         return "\n\n".join(formatted_texts)
 
     def generate_analysis(self, raw_issue, papers):
-        client = create_gemini_client()
-
-        self.model_name = crawler_config.get_default_model()
         prompt_template = crawler_config.get_prompt("journal_analysis")
         if not prompt_template:
             raise ProviderError("journal_analysis prompt is not configured")
@@ -48,19 +48,8 @@ class AnalysisProvider:
         prompt = f"{prompt}\n\n{self._format_papers_for_prompt(papers)}"
 
         try:
-            response_stream = client.models.generate_content_stream(
-                model=self.model_name,
-                contents=prompt,
-            )
+            result = (self.llm_service or LLMService()).generate_text("paper_analysis", prompt)
         except Exception as exc:
-            raise ProviderError(f"Failed to start analysis: {exc}") from exc
-
-        full_response = []
-        try:
-            for chunk in response_stream:
-                if getattr(chunk, "text", None):
-                    full_response.append(chunk.text)
-        except Exception as exc:
-            raise ProviderError(f"Analysis streaming failed: {exc}") from exc
-
-        return "".join(full_response)
+            raise ProviderError(f"Analysis request failed: {exc}") from exc
+        self.model_name = result.model_name
+        return result.text

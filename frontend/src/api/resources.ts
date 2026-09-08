@@ -3,12 +3,16 @@ import type {
   CrawlTask,
   CrawlTaskResult,
   Folder,
-  ImportKnownResult,
-  IssueAnalysis,
+  FullTextTask,
   Journal,
+  LLMProfile,
+  LLMSceneBinding,
   Literature,
   LiteraturePage,
   Note,
+  PaperAnalysis,
+  PaperAnalysisPage,
+  AnalysisIssueOption,
   ProbeIssuesResult,
   RawIssue,
   RawIssuePage,
@@ -73,19 +77,53 @@ export const journalApi = {
     data<ProbeIssuesResult>(
       api.get(`/journals/${id}/issues`, { params: { source_id: sourceId, year }, timeout: 30_000 }),
     ),
-  importKnown: () => data<ImportKnownResult>(api.post('/journals/import-known')),
 }
 export const crawlApi = {
   tasks: () => data<CrawlTask[]>(api.get('/crawl-tasks', { params: { _t: Date.now() } })),
   create: (p: object) => data<CrawlTaskResult>(api.post('/crawl-tasks', p, { timeout: 180_000 })),
   issues: () => data<RawIssuePage>(api.get('/raw-issues', { params: { _t: Date.now() } })),
   issue: (id: string | number) => data<RawIssue>(api.get(`/raw-issues/${id}`)),
+  removeIssue: (id: string | number) => data(api.delete(`/raw-issues/${id}`)),
   translate: (id: string | number) =>
     data<RawIssue>(api.post(`/raw-issues/${id}/translate`, {}, { timeout: 180_000 })),
-  analyze: (id: string | number) =>
-    data<IssueAnalysis>(api.post(`/raw-issues/${id}/analyze`, {}, { timeout: 180_000 })),
-  analysis: (id: string | number) =>
-    data<IssueAnalysis | null>(api.get(`/raw-issues/${id}/analysis`)),
+}
+export const fulltextApi = {
+  list: (params?: {
+    literature_id?: string | number
+    raw_issue_id?: string | number
+    limit?: number
+  }) => data<FullTextTask[]>(api.get('/fulltext-tasks', { params })),
+  get: (id: string | number) => data<FullTextTask>(api.get(`/fulltext-tasks/${id}`)),
+  createForLiterature: (id: string | number, replaceExisting = false) =>
+    data<FullTextTask>(
+      api.post(`/literatures/${id}/fulltext-tasks`, { replace_existing: replaceExisting }),
+    ),
+  createForIssue: (id: string | number) =>
+    data<FullTextTask>(api.post(`/raw-issues/${id}/fulltext-tasks`)),
+}
+export const llmApi = {
+  profiles: () => data<LLMProfile[]>(api.get('/llm/profiles')),
+  createProfile: (payload: Record<string, unknown>) =>
+    data<LLMProfile>(api.post('/llm/profiles', payload)),
+  updateProfile: (id: number, payload: Record<string, unknown>) =>
+    data<LLMProfile>(api.put(`/llm/profiles/${id}`, payload)),
+  removeProfile: (id: number) => data(api.delete(`/llm/profiles/${id}`)),
+  testProfile: (id: number) => data<LLMProfile>(api.post(`/llm/profiles/${id}/test`)),
+  scenes: () => data<LLMSceneBinding[]>(api.get('/llm/scenes')),
+  bindScene: (scene: string, profileId: number) =>
+    data<LLMSceneBinding>(api.put(`/llm/scenes/${scene}`, { profile_id: profileId })),
+}
+export const paperAnalysisApi = {
+  list: () => data<PaperAnalysisPage>(api.get('/paper-analyses')),
+  get: (id: number) => data<PaperAnalysis>(api.get(`/paper-analyses/${id}`)),
+  issues: () => data<AnalysisIssueOption[]>(api.get('/paper-analyses/issues')),
+  preview: (payload: Record<string, unknown>) =>
+    data<Literature[]>(api.post('/paper-analyses/selection-preview', payload)),
+  create: (payload: Record<string, unknown>) =>
+    data<PaperAnalysis>(api.post('/paper-analyses', payload)),
+  rerun: (id: number, profileId?: number) =>
+    data<PaperAnalysis>(api.post(`/paper-analyses/${id}/rerun`, { profile_id: profileId })),
+  remove: (id: number) => data(api.delete(`/paper-analyses/${id}`)),
 }
 export const videoApi = {
   list: () => data<VideoTask[]>(api.get('/video-note-tasks')),

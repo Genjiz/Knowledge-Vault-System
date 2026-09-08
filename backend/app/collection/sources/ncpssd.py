@@ -20,6 +20,7 @@ class NcpssdSource(SourceAdapter):
     source_id = "ncpssd"
     display_name = "国家哲社文献中心"
     region = "domestic"
+    metadata_priority = 200
     capabilities = {
         "list_issues": False,
         "download_pdf": False,

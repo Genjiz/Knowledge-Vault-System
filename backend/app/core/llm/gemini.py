@@ -4,8 +4,8 @@ from functools import lru_cache
 
 from dotenv import load_dotenv
 
-from app.collection.sources.base import ProviderError
 from app.collection.runtime.paths import get_project_root, get_workspace_root
+from app.core.llm.errors import LLMError
 
 
 def _env_file_candidates():
@@ -48,7 +48,7 @@ def load_gemini_api_key():
         if file_path.exists():
             return file_path.read_text(encoding="utf-8").strip()
 
-    raise ProviderError("Gemini API key not found")
+    raise LLMError("Gemini API key not found")
 
 
 def load_gemini_proxy_url():
@@ -64,7 +64,7 @@ def create_gemini_client():
     try:
         genai = importlib.import_module("google.genai")
     except ModuleNotFoundError as exc:
-        raise ProviderError("google-genai is not installed") from exc
+        raise LLMError("google-genai is not installed") from exc
 
     http_options = None
     proxy_url = load_gemini_proxy_url()

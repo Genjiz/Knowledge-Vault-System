@@ -11,6 +11,8 @@ import {
   LiteratureDetailPage,
   LiteratureFormPage,
   LiteratureListPage,
+  ModelSettingsPage,
+  PaperAnalysisPage,
   RawIssueDetailPage,
   RawIssueListPage,
   StatisticsPage,
@@ -29,6 +31,7 @@ const routes = [
   route('/literatures/new', LiteratureFormPage),
   route('/literatures/$id', LiteratureDetailPage),
   route('/literatures/$id/edit', LiteratureFormPage),
+  route('/paper-analysis', PaperAnalysisPage),
   route('/tags', TagPage),
   route('/folders', FolderPage),
   route('/statistics', StatisticsPage),
@@ -41,6 +44,7 @@ const routes = [
   route('/video-notes', VideoNoteHomePage),
   route('/video-notes/tasks', VideoNoteListPage),
   route('/video-notes/tasks/$id', VideoNoteDetailPage),
+  route('/settings/models', ModelSettingsPage),
 ]
 const routeTree = rootRoute.addChildren(routes)
 export const router = createRouter({ routeTree, defaultPreload: 'intent' })

@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
-import { Play, RefreshCw, Settings2, Trash2 } from 'lucide-react'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { BrainCircuit, Download, Play, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { Journal, ProbeIssue, RawIssue, SourceMeta } from '@/api/types'
-import { crawlApi, journalApi } from '@/api/resources'
+import type { FullTextTask, Journal, ProbeIssue, RawIssue, SourceMeta } from '@/api/types'
+import { crawlApi, fulltextApi, journalApi } from '@/api/resources'
 import {
   Badge,
   Button,
@@ -20,7 +20,6 @@ import {
   Select,
 } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
-import { renderMarkdownToHtml } from '@/lib/markdown'
 
 type SourceRow = SourceMeta & {
   enabled: boolean
@@ -44,8 +43,40 @@ function regionLabel(region?: string) {
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (['completed', 'ok'].includes(status || '')) return 'success'
   if (['failed', 'error'].includes(status || '')) return 'danger'
-  if (['running', 'pending'].includes(status || '')) return 'warning'
+  if (['running', 'pending', 'partial'].includes(status || '')) return 'warning'
   return 'neutral'
+}
+function isFullTextRunning(task?: FullTextTask) {
+  return task?.status === 'pending' || task?.status === 'running'
+}
+function fullTextStatusLabel(status?: string) {
+  if (status === 'completed') return '已完成'
+  if (status === 'partial') return '部分完成'
+  if (status === 'failed') return '失败'
+  if (status === 'running') return '下载中'
+  return '等待开始'
+}
+function FullTextTaskSummary({ task }: { task?: FullTextTask }) {
+  if (!task) return null
+  const failures = task.items.filter((item) => item.status === 'failed')
+  return (
+    <div className={`alert mt-4 ${task.failed_count ? 'alert--warning' : ''}`}>
+      <div className="actions justify-between">
+        <strong>全文任务：{fullTextStatusLabel(task.status)}</strong>
+        <Badge tone={statusTone(task.status)}>{task.progress_message || task.status}</Badge>
+      </div>
+      <p className="muted mt-2">
+        共 {task.total_count} 篇 · 成功 {task.succeeded_count} · 失败 {task.failed_count} · 跳过{' '}
+        {task.skipped_count}
+      </p>
+      {failures.slice(0, 5).map((item) => (
+        <p className="muted mt-2" key={item.id}>
+          {item.literature_title || `文献 #${item.literature_id || '-'}`}：
+          {item.error_message || '下载失败'}
+        </p>
+      ))}
+    </div>
+  )
 }
 function sourceRows(sources: SourceMeta[], journal?: Journal, region = '') {
   const configured = new Map((journal?.sources || []).map((item) => [item.source_id, item]))
@@ -145,16 +176,6 @@ export function JournalSourcesPage() {
       await client.invalidateQueries({ queryKey: ['journals'] })
     },
   })
-  const importKnown = useMutation({
-    mutationFn: journalApi.importKnown,
-    onSuccess: async (result) => {
-      toast.success(
-        `导入完成：新增 ${result.created?.length || 0}，补充 ${result.updated?.length || 0}`,
-      )
-      await client.invalidateQueries({ queryKey: ['journals'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
   const testSource = useMutation({
     mutationFn: ({ id, sourceId }: { id: number; sourceId: string }) =>
       journalApi.testSource(id, sourceId),
@@ -210,18 +231,7 @@ export function JournalSourcesPage() {
         <PanelHeader
           title="期刊清单"
           caption="默认源会在采集任务台自动选中。"
-          actions={
-            <div className="actions">
-              <Button
-                variant="secondary"
-                disabled={importKnown.isPending}
-                onClick={() => importKnown.mutate()}
-              >
-                导入内置清单
-              </Button>
-              <Button onClick={() => show()}>新增期刊</Button>
-            </div>
-          }
+          actions={<Button onClick={() => show()}>新增期刊</Button>}
         />
         {list.length ? (
           <div className="cards-grid">
@@ -450,11 +460,13 @@ export function CrawlTaskPage() {
     [sourceId, setSourceId] = useState(requestedSource),
     [year, setYear] = useState(new Date().getFullYear()),
     [issue, setIssue] = useState(''),
+    [downloadFulltext, setDownloadFulltext] = useState(false),
     [probed, setProbed] = useState<ProbeIssue[]>([]),
     [last, setLast] = useState<RawIssue | null>(null)
   const journal = (journals.data || []).find((item) => item.name === journalName),
     available = (journal?.sources || []).filter((source) => source.enabled),
-    sourceMeta = sources.data?.find((source) => source.source_id === sourceId)
+    sourceMeta = sources.data?.find((source) => source.source_id === sourceId),
+    canDownloadFulltext = Boolean(sourceMeta?.capabilities.download_pdf)
   const chooseJournal = (name: string) => {
     setJournalName(name)
     const next = (journals.data || []).find((item) => item.name === name)
@@ -462,6 +474,7 @@ export function CrawlTaskPage() {
       next?.sources.find((source) => source.enabled && source.is_default) ||
       next?.sources.find((source) => source.enabled)
     setSourceId(preferred?.source_id || '')
+    setDownloadFulltext(false)
     setProbed([])
   }
   const probe = useMutation({
@@ -474,10 +487,19 @@ export function CrawlTaskPage() {
   })
   const create = useMutation({
     mutationFn: () =>
-      crawlApi.create({ source_type: sourceId, journal_name: journalName, year, issue }),
+      crawlApi.create({
+        source_type: sourceId,
+        journal_name: journalName,
+        year,
+        issue,
+        download_fulltext: downloadFulltext,
+      }),
     onSuccess: async (result) => {
       setLast(result.raw_issue)
-      toast.success('采集任务完成并已写入原始数据库')
+      toast.success(
+        result.fulltext_task ? '题录采集完成，全文任务已开始' : '采集任务完成并已写入原始数据库',
+      )
+      if (result.fulltext_error) toast.warning(`全文任务未启动：${result.fulltext_error}`)
       await Promise.all([
         client.invalidateQueries({ queryKey: ['crawl-tasks'] }),
         client.invalidateQueries({ queryKey: ['raw-issues'] }),
@@ -524,6 +546,7 @@ export function CrawlTaskPage() {
                 disabled={!journalName}
                 onChange={(e) => {
                   setSourceId(e.target.value)
+                  setDownloadFulltext(false)
                   setProbed([])
                 }}
               >
@@ -563,6 +586,18 @@ export function CrawlTaskPage() {
                 探测期号
               </Button>
             </div>
+            {canDownloadFulltext && (
+              <Field className="span-12" label="采集内容">
+                <label className="switch-label">
+                  <input
+                    type="checkbox"
+                    checked={downloadFulltext}
+                    onChange={(e) => setDownloadFulltext(e.target.checked)}
+                  />
+                  题录完成后补采全文
+                </label>
+              </Field>
+            )}
           </div>
           {journalName && !available.length && (
             <div className="alert alert--warning mt-4">
@@ -691,6 +726,12 @@ export function RawIssueListPage() {
               <Button variant="secondary" asChild>
                 <Link to="/crawler/tasks">返回任务台</Link>
               </Button>
+              <Button asChild>
+                <Link to="/paper-analysis">
+                  <BrainCircuit size={16} />
+                  论文分析
+                </Link>
+              </Button>
             </div>
           }
         />
@@ -739,15 +780,22 @@ export function RawIssueListPage() {
                             ? '已完成'
                             : '未完成'}
                       </Badge>
-                      <Badge tone={item.analysis_status === 'completed' ? 'success' : 'warning'}>
-                        分析：{item.analysis_status === 'completed' ? '已完成' : '未完成'}
-                      </Badge>
                     </div>
-                    <Button className="mt-4" variant="secondary" asChild>
-                      <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
-                        查看详情
-                      </Link>
-                    </Button>
+                    <div className="actions mt-4">
+                      <Button variant="secondary" asChild>
+                        <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
+                          查看详情
+                        </Link>
+                      </Button>
+                      <Button asChild>
+                        <a
+                          href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
+                        >
+                          <BrainCircuit size={16} />
+                          分析本期
+                        </a>
+                      </Button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -763,25 +811,23 @@ export function RawIssueListPage() {
 
 export function RawIssueDetailPage() {
   const id = useParams({ strict: false }).id || '',
+    navigate = useNavigate(),
     client = useQueryClient(),
     issue = useQuery({
       queryKey: ['raw-issue', id],
       queryFn: () => crawlApi.issue(id),
       enabled: Boolean(id),
     }),
-    analysis = useQuery({
-      queryKey: ['raw-issue-analysis', id],
-      queryFn: () => crawlApi.analysis(id),
+    fulltextTasks = useQuery({
+      queryKey: ['fulltext-tasks', 'issue', id],
+      queryFn: () => fulltextApi.list({ raw_issue_id: id, limit: 1 }),
       enabled: Boolean(id),
+      refetchInterval: (query) => (isFullTextRunning(query.state.data?.[0]) ? 2000 : false),
     })
-  const [tab, setTab] = useState(
-      new URLSearchParams(location.search).get('tab') === 'analysis' ? 'analysis' : 'papers',
-    ),
-    [lang, setLang] = useState<'zh' | 'en'>('en')
+  const [lang, setLang] = useState<'zh' | 'en'>('en')
   const refresh = async () =>
     Promise.all([
       client.invalidateQueries({ queryKey: ['raw-issue', id] }),
-      client.invalidateQueries({ queryKey: ['raw-issue-analysis', id] }),
       client.invalidateQueries({ queryKey: ['raw-issues'] }),
     ])
   const translate = useMutation({
@@ -793,21 +839,31 @@ export function RawIssueDetailPage() {
     },
     onError: (error) => toast.error(error.message),
   })
-  const analyze = useMutation({
-    mutationFn: () => crawlApi.analyze(id),
+  const remove = useMutation({
+    mutationFn: () => crawlApi.removeIssue(id),
     onSuccess: async () => {
-      toast.success('分析结果已生成')
-      setTab('analysis')
-      await refresh()
+      await client.invalidateQueries({ queryKey: ['raw-issues'] })
+      toast.success('采集期号已删除，文献列表已按剩余来源更新')
+      await navigate({ to: '/crawler/issues' })
     },
     onError: (error) => toast.error(error.message),
   })
-  if (issue.isLoading || analysis.isLoading) return <LoadingState />
-  if (issue.error || analysis.error || !issue.data)
-    return <ErrorState error={issue.error || analysis.error} />
+  const acquireFulltext = useMutation({
+    mutationFn: () => fulltextApi.createForIssue(id),
+    onSuccess: async (task) => {
+      client.setQueryData(['fulltext-tasks', 'issue', id], [task])
+      toast.success('本期全文补采任务已开始')
+      await client.invalidateQueries({ queryKey: ['fulltext-tasks', 'issue', id] })
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  if (issue.isLoading || fulltextTasks.isLoading) return <LoadingState />
+  if (issue.error || fulltextTasks.error || !issue.data)
+    return <ErrorState error={issue.error || fulltextTasks.error} />
   const item = issue.data,
     isDomestic = item.region === 'domestic',
-    displayLang = isDomestic ? 'zh' : lang
+    displayLang = isDomestic ? 'zh' : lang,
+    latestFulltextTask = fulltextTasks.data?.[0]
   return (
     <div className="page-shell">
       <PageHero
@@ -821,117 +877,110 @@ export function RawIssueDetailPage() {
             label: 'Translation',
             value: isDomestic ? 'N/A' : item.translation_status || 'pending',
           },
-          { label: 'Analysis', value: item.analysis_status || 'pending' },
         ]}
       />
       <div className="actions justify-between">
         <Button variant="secondary" asChild>
           <Link to="/crawler/issues">返回期号库</Link>
         </Button>
-        {item.source_url && (
-          <Button variant="secondary" asChild>
-            <a href={item.source_url} target="_blank" rel="noreferrer">
-              打开来源页面
+        <div className="actions">
+          {item.source_url && (
+            <Button variant="secondary" asChild>
+              <a href={item.source_url} target="_blank" rel="noreferrer">
+                打开来源页面
+              </a>
+            </Button>
+          )}
+          {item.source_type === 'magtech' && (
+            <Button
+              disabled={acquireFulltext.isPending || isFullTextRunning(latestFulltextTask)}
+              onClick={() => acquireFulltext.mutate()}
+            >
+              <Download size={16} />
+              {isFullTextRunning(latestFulltextTask) ? '全文下载中' : '补采本期全文'}
+            </Button>
+          )}
+          <Button asChild>
+            <a
+              href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
+            >
+              <BrainCircuit size={16} />
+              分析本期
             </a>
           </Button>
-        )}
-      </div>
-      <Card>
-        <div className="tabs">
-          <button
-            className={tab === 'papers' ? 'tab active' : 'tab'}
-            onClick={() => setTab('papers')}
-          >
-            论文
-          </button>
-          <button
-            className={tab === 'analysis' ? 'tab active' : 'tab'}
-            onClick={() => setTab('analysis')}
-          >
-            分析
-          </button>
-        </div>
-        {tab === 'papers' ? (
-          <>
-            <PanelHeader
-              title="论文详情"
-              actions={
-                <div className="actions">
-                  {!isDomestic && (
-                    <>
-                      <Button disabled={translate.isPending} onClick={() => translate.mutate()}>
-                        {translate.isPending ? '翻译中...' : '翻译本期'}
-                      </Button>
-                      <Select
-                        value={lang}
-                        onChange={(e) => setLang(e.target.value === 'zh' ? 'zh' : 'en')}
-                      >
-                        <option value="zh">中文</option>
-                        <option value="en">English</option>
-                      </Select>
-                    </>
-                  )}
-                  <span className="muted">共 {item.papers?.length || 0} 篇</span>
-                </div>
-              }
-            />
-            <div className="paper-list">
-              {item.papers?.map((paper, index) => {
-                const title =
-                  displayLang === 'zh'
-                    ? paper.title_zh || paper.title
-                    : paper.title || paper.title_zh
-                const abstract =
-                  displayLang === 'zh'
-                    ? paper.abstract_zh || paper.abstract
-                    : paper.abstract || paper.abstract_zh
-                return (
-                  <details className="paper-item" key={paper.id}>
-                    <summary>
-                      <span>#{index + 1}</span>
-                      <strong>{title || '暂无标题'}</strong>
-                    </summary>
-                    <div className="paper-body">
-                      <p className="muted">
-                        {paper.authors || '未填写作者'}
-                        {paper.pages ? ` · ${paper.pages}` : ''}
-                        {paper.doi ? ` · DOI ${paper.doi}` : ''}
-                      </p>
-                      <p className="prose whitespace-pre-wrap">{abstract || '暂无摘要'}</p>
-                      {paper.detail_url && (
-                        <a href={paper.detail_url} target="_blank" rel="noreferrer">
-                          打开论文页面
-                        </a>
-                      )}
-                    </div>
-                  </details>
+          <Button
+            variant="danger"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (
+                confirm(
+                  `确定删除《${item.journal_name}》${item.year} 年第 ${item.issue} 期的 ${item.source_type} 采集记录吗？文献列表会保留，并按剩余来源重新计算。`,
                 )
-              })}
-              {!item.papers?.length && <EmptyState />}
+              )
+                remove.mutate()
+            }}
+          >
+            <Trash2 size={16} />
+            {remove.isPending ? '删除中...' : '删除采集记录'}
+          </Button>
+        </div>
+      </div>
+      <FullTextTaskSummary task={latestFulltextTask} />
+      <Card>
+        <PanelHeader
+          title="论文详情"
+          actions={
+            <div className="actions">
+              {!isDomestic && (
+                <>
+                  <Button disabled={translate.isPending} onClick={() => translate.mutate()}>
+                    {translate.isPending ? '翻译中...' : '翻译本期'}
+                  </Button>
+                  <Select
+                    value={lang}
+                    onChange={(e) => setLang(e.target.value === 'zh' ? 'zh' : 'en')}
+                  >
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                  </Select>
+                </>
+              )}
+              <span className="muted">共 {item.papers?.length || 0} 篇</span>
             </div>
-          </>
-        ) : (
-          <>
-            <PanelHeader
-              title="分析摘要"
-              actions={
-                <Button disabled={analyze.isPending} onClick={() => analyze.mutate()}>
-                  {analyze.isPending ? '生成中...' : analysis.data ? '重新生成分析' : '生成分析'}
-                </Button>
-              }
-            />
-            {analysis.data?.content_markdown ? (
-              <article
-                className="prose analysis-markdown"
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdownToHtml(analysis.data.content_markdown),
-                }}
-              />
-            ) : (
-              <EmptyState>还没有分析结果</EmptyState>
-            )}
-          </>
-        )}
+          }
+        />
+        <div className="paper-list">
+          {item.papers?.map((paper, index) => {
+            const title =
+              displayLang === 'zh' ? paper.title_zh || paper.title : paper.title || paper.title_zh
+            const abstract =
+              displayLang === 'zh'
+                ? paper.abstract_zh || paper.abstract
+                : paper.abstract || paper.abstract_zh
+            return (
+              <details className="paper-item" key={paper.id}>
+                <summary>
+                  <span>#{index + 1}</span>
+                  <strong>{title || '暂无标题'}</strong>
+                </summary>
+                <div className="paper-body">
+                  <p className="muted">
+                    {paper.authors || '未填写作者'}
+                    {paper.pages ? ` · ${paper.pages}` : ''}
+                    {paper.doi ? ` · DOI ${paper.doi}` : ''}
+                  </p>
+                  <p className="prose whitespace-pre-wrap">{abstract || '暂无摘要'}</p>
+                  {paper.detail_url && (
+                    <a href={paper.detail_url} target="_blank" rel="noreferrer">
+                      打开论文页面
+                    </a>
+                  )}
+                </div>
+              </details>
+            )
+          })}
+          {!item.papers?.length && <EmptyState />}
+        </div>
       </Card>
     </div>
   )

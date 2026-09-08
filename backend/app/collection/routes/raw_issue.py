@@ -4,6 +4,7 @@ from app.collection.models import RawIssue, RawIssueAnalysis
 from app.collection.sources.base import ProviderError
 from app.collection.providers.translation_provider import TranslationProvider
 from app.collection.services.analysis_service import AnalysisService
+from app.collection.services.raw_issue_service import RawIssueService
 from app.collection.services.translation_service import TranslationService
 from app.core.extensions import db
 from app.core import error_response, paginated_response, success_response
@@ -17,6 +18,10 @@ def _translation_service():
 
 def _analysis_service():
     return current_app.config.get("CRAWLER_ANALYSIS_SERVICE")
+
+
+def _raw_issue_service():
+    return current_app.config.get("RAW_ISSUE_SERVICE") or RawIssueService()
 
 
 @raw_issue_bp.route("", methods=["GET"])
@@ -84,3 +89,11 @@ def get_raw_issue_analysis(raw_issue_id):
     if not analysis:
         return success_response(None)
     return success_response(analysis.to_dict())
+
+
+@raw_issue_bp.route("/<int:raw_issue_id>", methods=["DELETE"])
+def delete_raw_issue(raw_issue_id):
+    result = _raw_issue_service().delete_issue(raw_issue_id)
+    if result is None:
+        return error_response("Raw issue not found", 404)
+    return success_response(result, "采集期号已删除")

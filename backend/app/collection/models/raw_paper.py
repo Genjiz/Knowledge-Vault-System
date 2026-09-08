@@ -7,6 +7,7 @@ class RawPaper(BaseModel):
 
     raw_issue_id = db.Column(db.Integer, db.ForeignKey("raw_issue.id"), nullable=False, index=True)
     source_identifier = db.Column(db.String(255))
+    source_ref_json = db.Column(db.Text)
     title = db.Column(db.Text, nullable=False)
     title_zh = db.Column(db.Text)
     authors = db.Column(db.Text)
@@ -22,6 +23,18 @@ class RawPaper(BaseModel):
 
     raw_issue = db.relationship("RawIssue", back_populates="papers")
     llm_runs = db.relationship("LLMRun", back_populates="raw_paper", lazy="selectin")
+    literature_sources = db.relationship(
+        "LiteratureSource",
+        back_populates="raw_paper",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    fulltext_task_items = db.relationship(
+        "FullTextTaskItem",
+        back_populates="raw_paper",
+        lazy="selectin",
+        passive_deletes=True,
+    )
 
     def to_dict(self):
         data = super().to_dict()
@@ -29,6 +42,7 @@ class RawPaper(BaseModel):
             {
                 "raw_issue_id": self.raw_issue_id,
                 "source_identifier": self.source_identifier,
+                "source_ref_json": self.source_ref_json,
                 "title": self.title,
                 "title_zh": self.title_zh,
                 "authors": self.authors,

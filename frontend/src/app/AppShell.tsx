@@ -2,12 +2,14 @@ import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   Archive,
   BarChart3,
+  BrainCircuit,
   BookOpen,
   Download,
   FileText,
   Folder,
   Gauge,
   Tags,
+  Settings2,
   Upload,
   Video,
   Workflow,
@@ -19,6 +21,7 @@ const groups = [
     items: [
       ['/', '仪表盘', Gauge],
       ['/literatures', '文献列表', FileText],
+      ['/paper-analysis', '论文分析', BrainCircuit],
       ['/tags', '标签管理', Tags],
       ['/folders', '文件夹管理', Folder],
       ['/statistics', '统计分析', BarChart3],
@@ -38,6 +41,10 @@ const groups = [
       ['/video-notes', '视频转笔记', Video],
       ['/video-notes/tasks', '视频任务列表', FileText],
     ],
+  },
+  {
+    label: 'System',
+    items: [['/settings/models', '模型配置', Settings2]],
   },
   {
     label: 'Utilities',

@@ -2,7 +2,6 @@ import os
 import shutil
 import sys
 import tempfile
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -53,6 +52,19 @@ class GeminiRuntimeTestCase(unittest.TestCase):
         ):
             gemini.load_runtime_env.cache_clear()
             self.assertEqual(gemini.load_gemini_api_key(), "dotenv-test-key")
+
+    def test_missing_api_key_raises_llm_error(self):
+        from app.core.llm import LLMError, gemini
+
+        root = self.temp_root / "missing-key"
+        root.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(gemini, "get_project_root", return_value=root), patch.object(
+            gemini, "get_workspace_root", return_value=root
+        ):
+            gemini.load_runtime_env.cache_clear()
+            with self.assertRaises(LLMError):
+                gemini.load_gemini_api_key()
 
     def test_create_gemini_client_uses_proxy_from_dotenv(self):
         from app.core.llm import gemini

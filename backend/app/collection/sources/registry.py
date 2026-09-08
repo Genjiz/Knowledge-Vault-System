@@ -19,6 +19,12 @@ def source_ids():
     return set(SOURCE_CLASSES)
 
 
+def source_priority(source_id):
+    """返回题录字段物化优先级，未知来源使用基础优先级。"""
+    cls = SOURCE_CLASSES.get(source_id)
+    return getattr(cls, "metadata_priority", 100) if cls else 100
+
+
 def get_source(source_id, config=None):
     """按 source_id 与期刊级配置构造采集源实例。
 

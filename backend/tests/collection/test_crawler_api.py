@@ -103,6 +103,67 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertEqual(payload["data"]["task"]["id"], task.id)
         self.assertEqual(payload["data"]["raw_issue"]["id"], raw_issue.id)
 
+    def test_create_crawl_task_can_schedule_fulltext_as_second_stage(self):
+        task, raw_issue = self._seed_issue()
+        task.source_type = "magtech"
+        raw_issue.source_type = "magtech"
+        db.session.commit()
+
+        class FakeIngestionService:
+            def run_ingestion(self, source_type, journal_name, year, issue):
+                return task, raw_issue
+
+        class FakeTask:
+            id = 77
+
+            def to_dict(self):
+                return {"id": self.id, "mode": "after_ingestion", "status": "pending"}
+
+        class FakeFullTextService:
+            def create_issue_task(self, raw_issue_id, mode="issue"):
+                self.raw_issue_id = raw_issue_id
+                self.mode = mode
+                return FakeTask()
+
+        fulltext_service = FakeFullTextService()
+        scheduled = []
+        self.app.config["CRAWLER_INGESTION_SERVICE"] = FakeIngestionService()
+        self.app.config["FULLTEXT_SERVICE"] = fulltext_service
+        self.app.config["FULLTEXT_TASK_EXECUTOR"] = scheduled.append
+
+        response = self.client.post(
+            "/api/crawl-tasks",
+            json={
+                "source_type": "magtech",
+                "journal_name": "情报学报",
+                "year": 2026,
+                "issue": "7",
+                "download_fulltext": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        self.assertEqual(payload["fulltext_task"]["mode"], "after_ingestion")
+        self.assertEqual(fulltext_service.raw_issue_id, raw_issue.id)
+        self.assertEqual(fulltext_service.mode, "after_ingestion")
+        self.assertEqual(scheduled, [77])
+
+    def test_create_crawl_task_rejects_fulltext_for_unsupported_source(self):
+        response = self.client.post(
+            "/api/crawl-tasks",
+            json={
+                "source_type": "ncpssd",
+                "journal_name": "情报学报",
+                "year": 2026,
+                "issue": "7",
+                "download_fulltext": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("不支持全文", response.get_json()["message"])
+
     def test_create_crawl_task_returns_error_response_when_provider_fails(self):
         from app.collection.sources.base import ProviderError
 
@@ -204,6 +265,32 @@ class CrawlerApiTestCase(unittest.TestCase):
         analyze = self.client.post(f"/api/raw-issues/{raw_issue.id}/analyze")
         self.assertEqual(analyze.status_code, 502)
         self.assertIn("analysis request failed", analyze.get_json()["message"])
+
+    def test_delete_raw_issue_preserves_literature_and_removes_artifact(self):
+        from app.collection.pipeline.paper_merge import PaperMergeService
+        from app.papers.models import Literature
+
+        _, raw_issue = self._seed_issue()
+        literature = PaperMergeService().upsert_raw_paper(raw_issue.papers[0])
+        artifact_path = self.temp_dir / "raw-json" / "foreign" / "issue.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text("{}", encoding="utf-8")
+        raw_issue.raw_json_path = str(artifact_path)
+        db.session.commit()
+
+        response = self.client.delete(f"/api/raw-issues/{raw_issue.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(db.session.get(type(raw_issue), raw_issue.id))
+        preserved = db.session.get(Literature, literature.id)
+        self.assertIsNotNone(preserved)
+        self.assertIsNone(preserved.source_raw_paper_id)
+        self.assertFalse(artifact_path.exists())
+
+    def test_delete_raw_issue_returns_404_for_missing_issue(self):
+        response = self.client.delete("/api/raw-issues/99999")
+
+        self.assertEqual(response.status_code, 404)
 
 
 if __name__ == "__main__":

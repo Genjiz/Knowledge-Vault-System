@@ -9,6 +9,10 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
+def workspace_root() -> Path:
+    return BACKEND_ROOT.parent
+
+
 def data_root() -> Path:
     override = os.environ.get("DATA_ROOT")
     if override:

@@ -1,9 +1,6 @@
 import json
-import importlib
-
-from app.collection.legacy import config as crawler_config
 from app.collection.sources.base import ProviderError
-from app.core.llm.gemini import create_gemini_client
+from app.core.llm.service import LLMService
 from pydantic import BaseModel, ValidationError
 
 
@@ -18,20 +15,12 @@ class IssueTranslation(BaseModel):
 
 
 class TranslationProvider:
-    def __init__(self, client=None, model_name=None):
+    def __init__(self, client=None, model_name=None, llm_service=None):
         self.client = client
         self.model_name = model_name
-
-    def _load_runtime(self):
-        if self.client and self.model_name:
-            return self.client, self.model_name
-
-        self.client = create_gemini_client()
-        self.model_name = crawler_config.get_default_model()
-        return self.client, self.model_name
+        self.llm_service = llm_service
 
     def translate_papers(self, papers):
-        client, model_name = self._load_runtime()
         papers_data = []
         for index, paper in enumerate(papers):
             papers_data.append(
@@ -53,38 +42,33 @@ class TranslationProvider:
             f"{json.dumps(papers_data, ensure_ascii=False, indent=2)}"
         )
 
-        try:
-            genai_types = importlib.import_module("google.genai.types")
-            generate_config = genai_types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=IssueTranslation,
-            )
-        except Exception as exc:
-            raise ProviderError(f"Translation schema setup failed: {exc}") from exc
-
-        try:
-            response_stream = client.models.generate_content_stream(
-                model=model_name,
-                contents=prompt,
-                config=generate_config,
-            )
-        except Exception as exc:
-            raise ProviderError(f"Translation request failed: {exc}") from exc
-
-        full_response_parts = []
-        try:
-            for chunk in response_stream:
-                text = None
-                if hasattr(chunk, "text") and chunk.text:
-                    text = chunk.text
-                elif getattr(chunk, "candidates", None):
-                    text = chunk.candidates[0].content.parts[0].text
-                if text:
-                    full_response_parts.append(text)
-        except Exception as exc:
-            raise ProviderError(f"Translation streaming failed: {exc}") from exc
-
-        raw_response = "".join(full_response_parts)
+        if self.client and self.model_name:
+            # 保留旧构造器注入合同，供离线单元测试和渐进迁移使用。
+            try:
+                response_stream = self.client.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=None,
+                )
+                parts = []
+                for chunk in response_stream:
+                    text = getattr(chunk, "text", None)
+                    if not text and getattr(chunk, "candidates", None):
+                        text = chunk.candidates[0].content.parts[0].text
+                    if text:
+                        parts.append(text)
+                raw_response = "".join(parts)
+            except Exception as exc:
+                raise ProviderError(f"Translation request failed: {exc}") from exc
+        else:
+            try:
+                result = (self.llm_service or LLMService()).generate_text(
+                    "paper_translation", prompt
+                )
+                self.model_name = result.model_name
+                raw_response = result.text
+            except Exception as exc:
+                raise ProviderError(f"Translation request failed: {exc}") from exc
         try:
             if hasattr(IssueTranslation, "model_validate_json"):
                 parsed = IssueTranslation.model_validate_json(raw_response)

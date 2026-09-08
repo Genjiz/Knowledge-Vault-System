@@ -1,21 +1,12 @@
-from flask import current_app
-
 from app.collection.sources.base import ProviderError
-from app.core.llm.gemini import create_gemini_client
+from app.core.llm.service import LLMService
 
 
 class NoteGenerationService:
-    def __init__(self, client=None, model_name=None):
+    def __init__(self, client=None, model_name=None, llm_service=None):
         self.client = client
         self.model_name = model_name
-
-    def _load_runtime(self):
-        if self.client and self.model_name:
-            return self.client, self.model_name
-
-        self.client = create_gemini_client()
-        self.model_name = current_app.config.get("VIDEO_NOTE_GEMINI_MODEL", "gemini-2.5-flash")
-        return self.client, self.model_name
+        self.llm_service = llm_service
 
     @staticmethod
     def _format_generation_error(exc):
@@ -58,7 +49,6 @@ class NoteGenerationService:
         return normalized
 
     def generate_note(self, *, transcript_text, source_url, bvid, video_title):
-        client, model_name = self._load_runtime()
         prompt = (
             "我有一份 B 站视频的字幕文件（SRT 文本），请根据字幕内容生成一份结构化笔记。\n\n"
             "要求：\n"
@@ -75,27 +65,30 @@ class NoteGenerationService:
             f"{transcript_text}"
         )
 
-        try:
-            response_stream = client.models.generate_content_stream(
-                model=model_name,
-                contents=prompt,
-            )
-        except Exception as exc:
-            raise ProviderError(
-                f"Failed to start note generation: {self._format_generation_error(exc)}"
-            ) from exc
+        if self.client and self.model_name:
+            try:
+                response_stream = self.client.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=prompt,
+                )
+                raw = "".join(
+                    chunk.text for chunk in response_stream if getattr(chunk, "text", None)
+                )
+            except Exception as exc:
+                raise ProviderError(
+                    f"Note generation failed: {self._format_generation_error(exc)}"
+                ) from exc
+        else:
+            try:
+                result = (self.llm_service or LLMService()).generate_text("video_note", prompt)
+                self.model_name = result.model_name
+                raw = result.text
+            except Exception as exc:
+                raise ProviderError(
+                    f"Note generation failed: {self._format_generation_error(exc)}"
+                ) from exc
 
-        full_response = []
-        try:
-            for chunk in response_stream:
-                if getattr(chunk, "text", None):
-                    full_response.append(chunk.text)
-        except Exception as exc:
-            raise ProviderError(
-                f"Note generation streaming failed: {self._format_generation_error(exc)}"
-            ) from exc
-
-        markdown = self._normalize_markdown("".join(full_response))
+        markdown = self._normalize_markdown(raw)
         if not markdown:
-            raise ProviderError("Gemini returned an empty note")
+            raise ProviderError("模型返回了空笔记")
         return markdown

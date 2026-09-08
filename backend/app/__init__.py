@@ -1,4 +1,5 @@
 import os
+import re
 from flask import Flask, send_from_directory
 from config import config
 from app.core.extensions import db, cors, migrate
@@ -12,7 +13,14 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
     
     db.init_app(app)
-    cors.init_app(app)
+    cors.init_app(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": [re.compile(r"^http://(?:127\.0\.0\.1|localhost):\d+$")]
+            }
+        },
+    )
     migrate.init_app(app, db)
     
     upload_folder = app.config.get('UPLOAD_FOLDER')
@@ -20,8 +28,9 @@ def create_app(config_name=None):
     app.config['UPLOAD_FOLDER'] = upload_folder
     
     from app.papers.models import Journal, JournalSourceConfig
-    from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note
-    from app.collection.models import CrawlTask, CrawlTaskLog, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
+    from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note, PaperAnalysis, PaperAnalysisItem
+    from app.core.llm.models import LLMProfile, LLMSceneBinding
+    from app.collection.models import CrawlTask, CrawlTaskLog, FullTextTask, FullTextTaskItem, LiteratureSource, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
     from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
     
     @app.route('/uploads/pdfs/<path:filename>')

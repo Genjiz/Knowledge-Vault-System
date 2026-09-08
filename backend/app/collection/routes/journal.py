@@ -11,7 +11,6 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.collection.models.raw_issue import RawIssue
-from app.collection.services.journal_seed import seed_known_journals
 from app.collection.services.source_runner import SourceRunner
 from app.collection.sources.registry import describe_source, source_ids
 from app.core import error_response, success_response
@@ -135,12 +134,6 @@ def create_journal():
         db.session.rollback()
         return error_response("期刊已存在", 409)
     return success_response(_journal_payload(journal, _collect_stats()))
-
-
-@journal_bp.route("/import-known", methods=["POST"])
-def import_known_journals():
-    """导入内置已知期刊与源配置（NCPSSD 收录清单 + 已知官网源），只补不覆盖。"""
-    return success_response(seed_known_journals())
 
 
 @journal_bp.route("/<int:journal_id>", methods=["PUT"])

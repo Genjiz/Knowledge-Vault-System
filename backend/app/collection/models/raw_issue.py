@@ -45,6 +45,12 @@ class RawIssue(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    fulltext_tasks = db.relationship(
+        "FullTextTask",
+        back_populates="raw_issue",
+        lazy="selectin",
+        passive_deletes=True,
+    )
 
     def to_dict(self):
         data = super().to_dict()

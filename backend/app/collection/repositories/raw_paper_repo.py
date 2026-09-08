@@ -7,6 +7,17 @@ class RawPaperRepository(BaseRepository):
     model = RawPaper
 
     def replace_for_issue(self, raw_issue, papers):
+        raw_paper_ids = [paper.id for paper in raw_issue.papers if paper.id is not None]
+        if raw_paper_ids:
+            from app.collection.models import FullTextTaskItem
+            from app.papers.models import Literature
+
+            FullTextTaskItem.query.filter(
+                FullTextTaskItem.raw_paper_id.in_(raw_paper_ids)
+            ).update({FullTextTaskItem.raw_paper_id: None}, synchronize_session=False)
+            Literature.query.filter(
+                Literature.pdf_source_raw_paper_id.in_(raw_paper_ids)
+            ).update({Literature.pdf_source_raw_paper_id: None}, synchronize_session=False)
         raw_issue.papers.clear()
         db.session.flush()
 
@@ -15,6 +26,7 @@ class RawPaperRepository(BaseRepository):
             instance = RawPaper(
                 raw_issue_id=raw_issue.id,
                 source_identifier=paper.get("source_identifier"),
+                source_ref_json=paper.get("source_ref_json"),
                 title=paper["title"],
                 title_zh=paper.get("title_zh"),
                 authors=paper.get("authors"),

@@ -43,7 +43,7 @@ api.interceptors.response.use(
   (error: AxiosError<{ message?: string }>) => {
     const isBackgroundTimeout =
       error.code === 'ECONNABORTED' &&
-      /\/raw-issues\/\d+\/(translate|analyze)$/.test(String(error.config?.url || ''))
+      /\/raw-issues\/\d+\/translate$/.test(String(error.config?.url || ''))
     if (isBackgroundTimeout) {
       const timeoutError = new ApiError(
         '后台仍可能在执行，请稍后刷新查看结果',

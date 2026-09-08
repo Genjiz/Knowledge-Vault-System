@@ -10,7 +10,15 @@
 - ``capabilities``：可选能力开关；未实现的可选方法必须声明为 False
 - ``config_fields``：该源在期刊配置中需要填写的字段，前端据此动态渲染配置表单
 """
+from dataclasses import dataclass
 from datetime import datetime
+
+
+@dataclass(frozen=True)
+class PdfDownload:
+    content: bytes
+    source_url: str
+    content_type: str | None = None
 
 
 class ProviderError(Exception):
@@ -23,6 +31,7 @@ class SourceAdapter:
     source_id = "base"
     display_name = ""
     region = ""
+    metadata_priority = 100
     capabilities = {
         "list_issues": False,
         "download_pdf": False,

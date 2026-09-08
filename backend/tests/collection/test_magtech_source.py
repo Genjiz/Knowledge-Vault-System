@@ -4,6 +4,7 @@
 网络调用用假 session 覆盖，不发起真实请求。
 """
 import sys
+import json
 import unittest
 from pathlib import Path
 
@@ -23,8 +24,10 @@ def load_fixture(name):
 
 
 class FakeResponse:
-    def __init__(self, text="", status_code=200):
+    def __init__(self, text="", status_code=200, content=None, headers=None):
         self.text = text
+        self.content = content if content is not None else text.encode("utf-8")
+        self.headers = headers or {}
         self.status_code = status_code
 
     def raise_for_status(self):
@@ -145,6 +148,15 @@ class MagtechParsingTestCase(unittest.TestCase):
         self.assertEqual(data["title"], "")
         self.assertEqual(data["keywords"], [])
 
+    def test_parse_bibtex_strips_only_balanced_title_markup(self):
+        from app.collection.sources.magtech import parse_bibtex
+
+        balanced = parse_bibtex("@article{x, title={<bold>XGBoost</bold>方法}}")
+        unbalanced = parse_bibtex("@article{x, title={<bold>XGBoost方法}}")
+
+        self.assertEqual(balanced["title"], "XGBoost方法")
+        self.assertEqual(unbalanced["title"], "<bold>XGBoost方法")
+
     def test_parse_endnote_extracts_abstract_and_publish_date(self):
         from app.collection.sources.magtech import parse_endnote
 
@@ -219,6 +231,7 @@ class MagtechSourceContractTestCase(unittest.TestCase):
         self.assertEqual(first["pages"], "925-939")
         self.assertEqual(first["doi"], "10.3772/j.issn.1000-0135.2026.07.001")
         self.assertEqual(first["source_identifier"], "10.3772/j.issn.1000-0135.2026.07.001")
+        self.assertEqual(json.loads(first["source_ref_json"]), {"article_id": "1044"})
         self.assertEqual(first["detail_url"], "https://qbxb.istic.ac.cn/CN/abstract/article_1044.shtml")
         self.assertEqual(first["published_at"], "2026-07-24")
         self.assertEqual(first["sort_index"], 0)
@@ -284,6 +297,29 @@ class MagtechSourceContractTestCase(unittest.TestCase):
 
         self.assertEqual(payload["issue"]["paper_count_hint"], 10)
         self.assertEqual(payload["papers"], [])
+
+    def test_download_pdf_returns_binary_result_and_source_url(self):
+        from app.collection.sources.base import PdfDownload
+
+        session = RoutingSession(
+            {
+                "downloadArticleFile.do": FakeResponse(
+                    content=b"%PDF-1.4\nfixture",
+                    headers={"Content-Type": "application/x-download"},
+                )
+            }
+        )
+        source = self._make_source(session)
+
+        result = source.download_pdf({"article_id": "1044"})
+
+        self.assertIsInstance(result, PdfDownload)
+        self.assertEqual(result.content, b"%PDF-1.4\nfixture")
+        self.assertEqual(result.content_type, "application/x-download")
+        self.assertEqual(
+            result.source_url,
+            f"{BASE_URL}/CN/article/downloadArticleFile.do?attachType=PDF&id=1044",
+        )
 
 
 if __name__ == "__main__":

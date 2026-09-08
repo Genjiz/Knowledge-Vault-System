@@ -4,6 +4,7 @@ from app.papers.models.tag import Tag, LiteratureTag
 from app.papers.models.folder import Folder, LiteratureFolder
 from app.papers.models.journal import Journal, JournalSourceConfig
 from app.papers.models.note import Note
+from app.papers.models.paper_analysis import PaperAnalysis, PaperAnalysisItem
 
 __all__ = [
     'BaseModel',
@@ -15,6 +16,8 @@ __all__ = [
     'Note',
     'Journal',
     'JournalSourceConfig',
+    'PaperAnalysis',
+    'PaperAnalysisItem',
     'CrawlTask',
     'CrawlTaskLog',
     'LLMRun',

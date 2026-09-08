@@ -31,10 +31,20 @@ export interface Literature {
   literature_type?: string
   publisher?: string
   pdf_path?: string | null
+  pdf_source_type?: string | null
+  pdf_source_raw_paper_id?: number | null
+  pdf_sha256?: string | null
+  pdf_size_bytes?: number | null
   created_at?: string
   tags?: Tag[]
   folder_ids?: number[]
   source?: string
+  field_sources?: Record<string, string>
+  collection_sources?: Array<{
+    id: number
+    raw_paper_id: number
+    source_type: string
+  }>
   journal_id?: number | null
   status_changed_at?: string | null
 }
@@ -137,11 +147,6 @@ export interface RawIssue {
   analysis_status?: string
   papers?: RawPaper[]
 }
-export interface IssueAnalysis {
-  id?: number
-  status?: string
-  content_markdown?: string
-}
 export interface RawIssuePage {
   items: RawIssue[]
   total: number
@@ -167,10 +172,93 @@ export interface ProbeIssuesResult {
 export interface CrawlTaskResult {
   task: CrawlTask
   raw_issue: RawIssue
+  fulltext_task?: FullTextTask
+  fulltext_error?: string
 }
-export interface ImportKnownResult {
-  created?: unknown[]
-  updated?: unknown[]
+export interface FullTextTaskItem {
+  id: number
+  literature_id?: number | null
+  literature_title?: string | null
+  raw_paper_id?: number | null
+  source_type: string
+  source_url?: string | null
+  status: string
+  error_message?: string | null
+  pdf_path?: string | null
+  file_size_bytes?: number | null
+}
+export interface FullTextTask {
+  id: number
+  mode: 'single' | 'issue' | 'after_ingestion'
+  source_type: string
+  raw_issue_id?: number | null
+  status: string
+  replace_existing?: boolean
+  total_count: number
+  succeeded_count: number
+  failed_count: number
+  skipped_count: number
+  progress_message?: string | null
+  error_message?: string | null
+  items: FullTextTaskItem[]
+  created_at?: string
+  started_at?: string | null
+  finished_at?: string | null
+}
+export interface LLMProfile {
+  id: number
+  name: string
+  protocol: 'gemini' | 'openai'
+  base_url?: string | null
+  model_name: string
+  enabled: boolean
+  has_api_key: boolean
+  last_check_status?: string | null
+  last_check_message?: string | null
+  last_checked_at?: string | null
+}
+export interface LLMSceneBinding {
+  scene: 'paper_analysis' | 'paper_translation' | 'video_note'
+  label: string
+  profile_id?: number | null
+  profile_name?: string | null
+  model_name?: string | null
+}
+export interface AnalysisIssueOption {
+  journal_id?: number | null
+  journal: string
+  year: number
+  issue: string
+  paper_count: number
+}
+export interface PaperAnalysisItem {
+  id: number
+  literature_id?: number | null
+  title: string
+  authors?: string
+  journal?: string
+  year?: number | null
+  issue?: string
+  abstract?: string
+  keywords?: string
+}
+export interface PaperAnalysis {
+  id: number
+  title: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  profile_id?: number | null
+  profile_name?: string | null
+  model_name?: string | null
+  paper_count: number
+  content_markdown?: string | null
+  error_message?: string | null
+  created_at?: string
+  finished_at?: string | null
+  items?: PaperAnalysisItem[]
+}
+export interface PaperAnalysisPage {
+  items: PaperAnalysis[]
+  total: number
 }
 export interface VideoTask {
   id: number

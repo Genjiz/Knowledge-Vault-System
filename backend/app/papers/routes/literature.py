@@ -4,7 +4,9 @@ from app.core import success_response, error_response, paginated_response
 from app.papers.models.tag import LiteratureTag
 from app.papers.models.folder import LiteratureFolder
 from app.core.extensions import db
+from app.papers.services.paper_service import MATERIALIZED_FIELDS, mark_user_edited_fields
 from datetime import UTC, datetime
+import hashlib
 import os
 
 literature_bp = Blueprint('literature', __name__, url_prefix='/api/literatures')
@@ -86,6 +88,12 @@ def create_literature():
         publisher=data.get('publisher'),
         status=data.get('status', '未读')
     )
+    literature.user_edited_fields_json = "[]"
+    mark_user_edited_fields(
+        literature,
+        [field for field in MATERIALIZED_FIELDS if data.get(field) not in (None, '')],
+    )
+    db.session.commit()
     
     if data.get('tag_ids'):
         for tag_id in data['tag_ids']:
@@ -122,8 +130,19 @@ def update_literature(literature_id):
     if 'status' in data and data['status'] != literature.status:
         update_data['status'] = data['status']
         update_data['status_changed_at'] = datetime.now(UTC)
+
+    explicit_user_fields = data.get('user_edited_fields')
+    if explicit_user_fields is not None and not isinstance(explicit_user_fields, list):
+        return error_response('user_edited_fields 必须是字段名数组')
+    fields_to_mark = (
+        [field for field in explicit_user_fields if field in update_data]
+        if explicit_user_fields is not None
+        else update_data.keys()
+    )
     
     literature_repo.update(literature_id, **update_data)
+    mark_user_edited_fields(literature, fields_to_mark)
+    db.session.commit()
     
     if 'tag_ids' in data:
         LiteratureTag.query.filter_by(literature_id=literature_id).delete()
@@ -182,9 +201,19 @@ def upload_pdf(literature_id):
     filename = f'{literature_id}.pdf'
     file_path = os.path.join(upload_folder, filename)
     file.save(file_path)
+    file_size = os.path.getsize(file_path)
+    with open(file_path, 'rb') as saved_file:
+        digest = hashlib.sha256(saved_file.read()).hexdigest()
     
     relative_path = f'uploads/pdfs/{filename}'
-    literature_repo.update(literature_id, pdf_path=relative_path)
+    literature_repo.update(
+        literature_id,
+        pdf_path=relative_path,
+        pdf_source_type='user',
+        pdf_source_raw_paper_id=None,
+        pdf_sha256=digest,
+        pdf_size_bytes=file_size,
+    )
     
     return success_response({'pdf_path': relative_path}, 'PDF上传成功')
 
@@ -204,7 +233,14 @@ def delete_pdf(literature_id):
         except Exception:
             pass
     
-    literature_repo.update(literature_id, pdf_path=None)
+    literature_repo.update(
+        literature_id,
+        pdf_path=None,
+        pdf_source_type=None,
+        pdf_source_raw_paper_id=None,
+        pdf_sha256=None,
+        pdf_size_bytes=None,
+    )
     return success_response(message='PDF删除成功')
 
 

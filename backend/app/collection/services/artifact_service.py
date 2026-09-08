@@ -57,3 +57,27 @@ class ArtifactService:
         analysis.artifact_md_path = str(artifact_path)
         db.session.commit()
         return str(artifact_path)
+
+    def delete_files(self, paths):
+        """删除采集派生产物，仅允许操作当前采集产物根目录内的文件。"""
+        root = self._artifact_root().resolve()
+        deleted = []
+        for value in paths:
+            if not value:
+                continue
+            candidate = Path(value).resolve()
+            try:
+                candidate.relative_to(root)
+            except ValueError:
+                continue
+            if candidate.is_file():
+                candidate.unlink()
+                deleted.append(str(candidate))
+            parent = candidate.parent
+            while parent != root and parent.is_dir():
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
+        return deleted

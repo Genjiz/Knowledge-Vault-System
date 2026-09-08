@@ -86,7 +86,7 @@ class ExecutionService:
                 current_step="generate_note",
                 progress_message="Generating Markdown note",
             )
-            self.task_service.append_log(task, "Starting Gemini note generation")
+            self.task_service.append_log(task, "Starting note generation")
             transcript_text = transcript_path.read_text(encoding="utf-8")
             markdown = self.note_generation_service.generate_note(
                 transcript_text=transcript_text,

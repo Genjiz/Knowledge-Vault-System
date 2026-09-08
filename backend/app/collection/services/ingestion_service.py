@@ -87,7 +87,10 @@ class IngestionService:
                 papers=payload["papers"],
             )
             self.artifact_service.export_raw_issue(raw_issue)
-            self.paper_merge.sync_issue(raw_issue)
+            self.paper_merge.sync_issue(
+                raw_issue,
+                affected_literature_ids=getattr(raw_issue, "_affected_literature_ids", None),
+            )
 
             task = self.task_service.update_task(
                 task.id,
@@ -133,11 +136,14 @@ class IngestionService:
             "crawl_task_id": task.id,
         }
 
+        affected_literature_ids = set()
         if raw_issue is None:
             raw_issue = self.raw_issue_repo.create(**raw_issue_data)
         else:
+            affected_literature_ids = self.paper_merge.unlink_issue(raw_issue)
             raw_issue = self.raw_issue_repo.update(raw_issue.id, **raw_issue_data)
 
         self.raw_paper_repo.replace_for_issue(raw_issue, papers)
         db.session.refresh(raw_issue)
+        raw_issue._affected_literature_ids = affected_literature_ids
         return raw_issue

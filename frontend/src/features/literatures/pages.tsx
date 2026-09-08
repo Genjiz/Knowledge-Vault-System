@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { BookOpen, FileText, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { BookOpen, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
-import type { Note } from '@/api/types'
-import { folderApi, literatureApi, noteApi, tagApi } from '@/api/resources'
+import type { FullTextTask, Note } from '@/api/types'
+import { folderApi, fulltextApi, literatureApi, noteApi, tagApi } from '@/api/resources'
 import {
   Badge,
   Button,
@@ -32,6 +32,29 @@ import {
 } from './model'
 
 const statuses = ['未读', '摘要浏览', '正在阅读', '已读完', '需要重读'] as const
+const materializedFormFields = [
+  'title',
+  'authors',
+  'journal',
+  'year',
+  'volume',
+  'issue',
+  'pages',
+  'doi',
+  'abstract',
+  'keywords',
+  'url',
+  'language',
+  'literature_type',
+  'publisher',
+] as const
+const dataSourceNames: Record<string, string> = {
+  user: '用户编辑',
+  magtech: '期刊官网',
+  ncpssd: '国家哲社文献中心',
+  elsevier: 'Elsevier',
+  retained: '已保留（原来源已删除）',
+}
 const noteTypes = [
   ['idea', '想法'],
   ['excerpt', '摘录'],
@@ -39,11 +62,25 @@ const noteTypes = [
   ['critique', '评价'],
 ] as const
 
+function dataSourceName(value?: string) {
+  return value ? dataSourceNames[value] || value : ''
+}
+
+function isFullTextRunning(task?: FullTextTask) {
+  return task?.status === 'pending' || task?.status === 'running'
+}
+
+function pdfSourceName(value?: string | null) {
+  if (value === 'user') return '用户上传'
+  if (value === 'magtech') return '期刊官网'
+  return value || '未记录'
+}
+
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
-  if (status === '已读完') return 'success'
+  if (status === '已读完' || status === 'completed') return 'success'
   if (status === '正在阅读') return 'info'
-  if (status === '摘要浏览') return 'warning'
-  if (status === '需要重读') return 'danger'
+  if (['摘要浏览', 'pending', 'running', 'partial'].includes(status || '')) return 'warning'
+  if (status === '需要重读' || status === 'failed') return 'danger'
   return 'neutral'
 }
 
@@ -391,7 +428,7 @@ export function LiteratureFormPage() {
     setValue,
     getValues,
     control,
-    formState: { errors, isSubmitting },
+    formState: { dirtyFields, errors, isSubmitting },
   } = form
   const selectedTags = useWatch({ control, name: 'tag_ids' }),
     selectedFolders = useWatch({ control, name: 'folder_ids' })
@@ -409,7 +446,10 @@ export function LiteratureFormPage() {
   })
   const submit = handleSubmit(async (values) => {
     try {
-      const payload = normalizeLiteraturePayload(values)
+      const payload: Record<string, unknown> = normalizeLiteraturePayload(values)
+      if (isEdit) {
+        payload.user_edited_fields = materializedFormFields.filter((field) => dirtyFields[field])
+      }
       const saved = isEdit
         ? await literatureApi.update(id!, payload)
         : await literatureApi.create(payload)
@@ -631,6 +671,22 @@ export function LiteratureDetailPage() {
     queryFn: () => noteApi.list(id),
     enabled: Boolean(id),
   })
+  const fulltextTasks = useQuery({
+    queryKey: ['fulltext-tasks', 'literature', id],
+    queryFn: () => fulltextApi.list({ literature_id: id, limit: 1 }),
+    enabled: Boolean(id),
+    refetchInterval: (query) => (isFullTextRunning(query.state.data?.[0]) ? 2000 : false),
+  })
+  const refreshedFulltextTask = useRef<number | null>(null)
+  useEffect(() => {
+    const task = fulltextTasks.data?.[0]
+    if (!task || isFullTextRunning(task) || refreshedFulltextTask.current === task.id) return
+    refreshedFulltextTask.current = task.id
+    void Promise.all([
+      client.invalidateQueries({ queryKey: ['literature', id] }),
+      client.invalidateQueries({ queryKey: ['literatures'] }),
+    ])
+  }, [client, fulltextTasks.data, id])
   const [noteType, setNoteType] = useState('all'),
     [noteOpen, setNoteOpen] = useState(false),
     [editing, setEditing] = useState<Note | null>(null),
@@ -694,11 +750,30 @@ export function LiteratureDetailPage() {
       await refresh()
     },
   })
-  if (detail.isLoading || notes.isLoading) return <LoadingState />
-  if (detail.error || notes.error || !detail.data)
-    return <ErrorState error={detail.error || notes.error} />
+  const acquireFulltext = useMutation({
+    mutationFn: () =>
+      fulltextApi.createForLiterature(
+        id,
+        Boolean(detail.data?.pdf_path && detail.data.pdf_source_type === 'magtech'),
+      ),
+    onSuccess: async (task) => {
+      client.setQueryData(['fulltext-tasks', 'literature', id], [task])
+      toast.success('官网全文任务已开始')
+      await client.invalidateQueries({ queryKey: ['fulltext-tasks', 'literature', id] })
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  if (detail.isLoading || notes.isLoading || fulltextTasks.isLoading) return <LoadingState />
+  if (detail.error || notes.error || fulltextTasks.error || !detail.data)
+    return <ErrorState error={detail.error || notes.error || fulltextTasks.error} />
   const literature = detail.data,
-    filtered = (notes.data || []).filter((note) => noteType === 'all' || note.type === noteType)
+    filtered = (notes.data || []).filter((note) => noteType === 'all' || note.type === noteType),
+    latestFulltextTask = fulltextTasks.data?.[0],
+    hasMagtechSource = Boolean(
+      literature.collection_sources?.some((source) => source.source_type === 'magtech'),
+    ),
+    canAcquireFulltext =
+      hasMagtechSource && (!literature.pdf_path || literature.pdf_source_type === 'magtech')
   const showNote = (type: string, note?: Note) => {
     setEditing(note || null)
     setDraft(
@@ -779,6 +854,19 @@ export function LiteratureDetailPage() {
               </Select>
             </div>
             {[
+              [
+                '关联采集源',
+                [
+                  ...new Set(
+                    (literature.collection_sources || []).map((item) =>
+                      dataSourceName(item.source_type),
+                    ),
+                  ),
+                ].join('、'),
+              ],
+              ['标题来源', dataSourceName(literature.field_sources?.title)],
+              ['作者来源', dataSourceName(literature.field_sources?.authors)],
+              ['摘要来源', dataSourceName(literature.field_sources?.abstract)],
               ['DOI', literature.doi],
               ['类型', literature.literature_type],
               ['语言', literature.language === 'zh' ? '中文' : '英文'],
@@ -804,13 +892,38 @@ export function LiteratureDetailPage() {
       <Card>
         <PanelHeader
           title="PDF 原件"
+          caption={
+            literature.pdf_path ? `来源：${pdfSourceName(literature.pdf_source_type)}` : undefined
+          }
           actions={
-            literature.pdf_path ? (
-              <div className="actions">
+            <div className="actions">
+              {literature.pdf_path && (
                 <Button onClick={() => window.open(`/${literature.pdf_path}`, '_blank')}>
                   <BookOpen size={16} />
                   阅读 PDF
                 </Button>
+              )}
+              {canAcquireFulltext && (
+                <Button
+                  variant="secondary"
+                  disabled={acquireFulltext.isPending || isFullTextRunning(latestFulltextTask)}
+                  onClick={() => {
+                    if (
+                      !literature.pdf_path ||
+                      confirm('确定重新从期刊官网下载并替换当前官网 PDF 吗？')
+                    )
+                      acquireFulltext.mutate()
+                  }}
+                >
+                  <Download size={16} />
+                  {isFullTextRunning(latestFulltextTask)
+                    ? '下载中'
+                    : literature.pdf_path
+                      ? '重新获取'
+                      : '从官网下载'}
+                </Button>
+              )}
+              {literature.pdf_path && (
                 <Button
                   variant="danger"
                   onClick={() => {
@@ -819,15 +932,38 @@ export function LiteratureDetailPage() {
                 >
                   移除
                 </Button>
-              </div>
-            ) : undefined
+              )}
+            </div>
           }
         />
+        {latestFulltextTask && (
+          <div className={`alert mt-4 ${latestFulltextTask.failed_count ? 'alert--warning' : ''}`}>
+            <div className="actions justify-between">
+              <strong>
+                全文任务：
+                {isFullTextRunning(latestFulltextTask)
+                  ? '处理中'
+                  : latestFulltextTask.status === 'completed'
+                    ? '已完成'
+                    : latestFulltextTask.status === 'partial'
+                      ? '部分完成'
+                      : '失败'}
+              </strong>
+              <Badge tone={statusTone(latestFulltextTask.status)}>
+                {latestFulltextTask.progress_message || latestFulltextTask.status}
+              </Badge>
+            </div>
+            {latestFulltextTask.items[0]?.error_message && (
+              <p className="muted mt-2">{latestFulltextTask.items[0].error_message}</p>
+            )}
+          </div>
+        )}
         {!literature.pdf_path && (
           <Field label="上传 PDF">
             <Input
               type="file"
               accept="application/pdf,.pdf"
+              disabled={isFullTextRunning(latestFulltextTask)}
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) uploadPdf.mutate(file)

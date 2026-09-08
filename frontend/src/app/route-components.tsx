@@ -29,6 +29,12 @@ export const LiteratureFormPage = lazy(() =>
 export const LiteratureListPage = lazy(() =>
   import('@/features/literatures/pages').then((module) => ({ default: module.LiteratureListPage })),
 )
+export const PaperAnalysisPage = lazy(() =>
+  import('@/features/analysis/pages').then((module) => ({ default: module.PaperAnalysisPage })),
+)
+export const ModelSettingsPage = lazy(() =>
+  import('@/features/settings/pages').then((module) => ({ default: module.ModelSettingsPage })),
+)
 export const CrawlTaskPage = lazy(() =>
   import('@/features/collection/pages').then((module) => ({ default: module.CrawlTaskPage })),
 )
