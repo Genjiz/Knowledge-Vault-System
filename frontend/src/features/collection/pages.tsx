@@ -49,6 +49,10 @@ interface JournalDraft {
 function regionLabel(region?: string) {
   return region === 'domestic' ? '国内' : region === 'foreign' ? '国外' : '未设置'
 }
+function coveragePercent(collected: number, expected: number) {
+  if (expected <= 0) return collected > 0 ? 100 : 0
+  return Math.min(Math.max((collected / expected) * 100, 0), 100)
+}
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (['completed', 'ok'].includes(status || '')) return 'success'
   if (['failed', 'error'].includes(status || '')) return 'danger'
@@ -766,46 +770,78 @@ export function RawIssueListPage() {
           <section>
             {selectedIssues.length ? (
               <div className="cards-grid cards-grid--2">
-                {selectedIssues.map((item) => (
-                  <article className="item-card" key={item.id}>
-                    <div className="actions justify-between">
-                      <strong>
-                        {item.year} 年第 {item.issue} 期
-                      </strong>
-                      <Badge>{regionLabel(item.region)}</Badge>
-                    </div>
-                    <p className="muted">{item.source_type}</p>
-                    <div className="issue-progress">
-                      <span>
-                        应有 <strong>{item.expected_paper_count || 0}</strong>
-                      </span>
-                      <span>
-                        标题 <strong>{item.title_collected_count || 0}</strong>
-                      </span>
-                      <span>
-                        摘要 <strong>{item.abstract_collected_count || 0}</strong>
-                      </span>
-                      <span>
-                        全文 <strong>{item.fulltext_collected_count || 0}</strong>
-                      </span>
-                    </div>
-                    <div className="actions mt-4">
-                      <Button variant="secondary" asChild>
-                        <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
-                          查看详情
-                        </Link>
-                      </Button>
-                      <Button variant="secondary" asChild>
-                        <a
-                          href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
-                        >
-                          <BrainCircuit size={16} />
-                          分析本期
-                        </a>
-                      </Button>
-                    </div>
-                  </article>
-                ))}
+                {selectedIssues.map((item) => {
+                  const expected = item.expected_paper_count ?? item.paper_count ?? 0
+                  const coverage = [
+                    {
+                      key: 'title',
+                      label: '标题',
+                      value: item.title_collected_count ?? 0,
+                    },
+                    {
+                      key: 'abstract',
+                      label: '摘要',
+                      value: item.abstract_collected_count ?? 0,
+                    },
+                    {
+                      key: 'fulltext',
+                      label: '全文',
+                      value: item.fulltext_collected_count ?? 0,
+                    },
+                  ]
+                  return (
+                    <article className="item-card issue-card" key={item.id}>
+                      <div className="actions justify-between issue-card__heading">
+                        <strong>
+                          {item.year} 年第 {item.issue} 期
+                        </strong>
+                        <Badge>{regionLabel(item.region)}</Badge>
+                      </div>
+                      <div className="issue-card__meta">
+                        <span>{item.source_type}</span>
+                        <i aria-hidden="true" />
+                        <span>
+                          应有 <strong>{expected}</strong> 篇
+                        </span>
+                      </div>
+                      <div className="issue-coverage" aria-label="采集进度">
+                        {coverage.map((metric) => (
+                          <div
+                            className={`issue-coverage__item issue-coverage__item--${metric.key}`}
+                            aria-label={`${metric.label}已采集 ${metric.value} 篇，应有 ${expected} 篇`}
+                            key={metric.key}
+                          >
+                            <strong>
+                              {metric.value}/{expected}
+                            </strong>
+                            <span>{metric.label}</span>
+                            <div className="issue-coverage__track" aria-hidden="true">
+                              <i
+                                className="issue-coverage__fill"
+                                style={{ width: `${coveragePercent(metric.value, expected)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="actions issue-card__actions">
+                        <Button variant="secondary" asChild>
+                          <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
+                            查看详情
+                          </Link>
+                        </Button>
+                        <Button variant="secondary" asChild>
+                          <a
+                            href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
+                          >
+                            <BrainCircuit size={16} />
+                            分析本期
+                          </a>
+                        </Button>
+                      </div>
+                    </article>
+                  )
+                })}
               </div>
             ) : (
               <EmptyState>暂无可展示期号</EmptyState>

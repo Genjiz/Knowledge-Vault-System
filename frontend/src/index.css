@@ -738,29 +738,102 @@ a {
   flex-direction: column;
   gap: 10px;
 }
-.issue-progress {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
+.issue-card {
+  padding: 20px;
 }
-.issue-progress span {
+.issue-card__heading > strong {
+  font-size: 17px;
+}
+.issue-card__meta {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 5px;
-  padding: 9px 6px;
-  border-right: 1px solid #e2e8f0;
-  color: #718198;
-  font-size: 11px;
+  align-items: center;
+  gap: 9px;
+  margin-top: 7px;
+  color: #71819a;
+  font-size: 13px;
 }
-.issue-progress span:last-child {
-  border-right: 0;
+.issue-card__meta i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #b3bfcc;
 }
-.issue-progress strong {
-  color: #172033;
+.issue-card__meta strong {
+  color: #243750;
   font-size: 14px;
+}
+.issue-coverage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 23px;
+}
+.issue-coverage__item {
+  position: relative;
+  min-width: 0;
+  padding: 1px 18px 14px;
+  border-left: 1px solid #e5ebf1;
+}
+.issue-coverage__item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.issue-coverage__item:last-child {
+  padding-right: 0;
+}
+.issue-coverage__item > strong {
+  display: block;
+  font-size: 21px;
+  line-height: 1;
+}
+.issue-coverage__item > span {
+  display: block;
+  margin-top: 7px;
+  color: #718198;
+  font-size: 12px;
+}
+.issue-coverage__track {
+  position: absolute;
+  right: 18px;
+  bottom: 0;
+  left: 18px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #edf2f6;
+}
+.issue-coverage__item:first-child .issue-coverage__track {
+  left: 0;
+}
+.issue-coverage__item:last-child .issue-coverage__track {
+  right: 0;
+}
+.issue-coverage__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.issue-coverage__item--title > strong {
+  color: #3478c5;
+}
+.issue-coverage__item--title .issue-coverage__fill {
+  background: #60a5fa;
+}
+.issue-coverage__item--abstract > strong {
+  color: #16876f;
+}
+.issue-coverage__item--abstract .issue-coverage__fill {
+  background: #34b99a;
+}
+.issue-coverage__item--fulltext > strong {
+  color: #c65d3a;
+}
+.issue-coverage__item--fulltext .issue-coverage__fill {
+  background: #ee8c68;
+}
+.issue-card__actions {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #edf1f5;
 }
 .paper-item {
   border: 1px solid #e2e8f0;

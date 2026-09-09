@@ -471,11 +471,17 @@ test('期刊页不再暴露内置清单，期号详情提供独立分析入口',
   await expect(page.getByRole('button', { name: '删除 情报学报' })).toHaveClass(/button--danger/)
 
   await page.goto('/crawler/issues')
-  await expect(page.getByText('应有 2')).toBeVisible()
-  await expect(page.getByText('标题 1')).toBeVisible()
-  await expect(page.getByText('摘要 1')).toBeVisible()
-  await expect(page.getByText('全文 1')).toBeVisible()
+  await expect(page.getByText('应有 2 篇')).toBeVisible()
+  await expect(page.getByText('1/2', { exact: true })).toHaveCount(3)
+  await expect(page.getByLabel('标题已采集 1 篇，应有 2 篇')).toBeVisible()
+  await expect(page.getByLabel('摘要已采集 1 篇，应有 2 篇')).toBeVisible()
+  await expect(page.getByLabel('全文已采集 1 篇，应有 2 篇')).toBeVisible()
+  await expect(page.locator('.issue-coverage__item--title .issue-coverage__fill')).toHaveAttribute(
+    'style',
+    'width: 50%;',
+  )
   await expect(page.getByText('翻译：不需要')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '查看详情' })).toHaveText('查看详情')
   await expect(page.getByRole('main').getByRole('link', { name: '论文分析' })).toHaveClass(
     /button--secondary/,
   )
