@@ -1,6 +1,5 @@
 import sys
 import tempfile
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -51,6 +50,7 @@ class CrawlerServiceSmokeTestCase(unittest.TestCase):
                 "volume": "60",
                 "language": "en",
                 "source_url": "https://example.com/issue",
+                "paper_count_hint": 1,
             },
             papers=[
                 {
@@ -72,6 +72,7 @@ class CrawlerServiceSmokeTestCase(unittest.TestCase):
 
         self.assertEqual(task.status, "pending")
         self.assertEqual(raw_issue.crawl_task_id, task.id)
+        self.assertEqual(raw_issue.expected_paper_count, 1)
         self.assertEqual(raw_issue.paper_count, 2)
         self.assertEqual(len(raw_issue.papers), 2)
         self.assertEqual(raw_issue.papers[0].title, "Paper A")

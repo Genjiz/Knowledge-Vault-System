@@ -1,7 +1,6 @@
 import shutil
 import sys
 import tempfile
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -187,15 +186,30 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertIn("browser connect error", response.get_json()["message"])
 
     def test_list_raw_issues_and_fetch_detail(self):
+        from app.collection.pipeline.paper_merge import PaperMergeService
+
         _, raw_issue = self._seed_issue()
+        raw_issue.expected_paper_count = 1
+        raw_issue.paper_count = 2
+        literature = PaperMergeService().upsert_raw_paper(raw_issue.papers[0])
+        literature.pdf_path = "uploads/pdfs/1.pdf"
+        db.session.commit()
 
         response = self.client.get("/api/raw-issues")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["data"]["items"][0]["id"], raw_issue.id)
+        issue_payload = response.get_json()["data"]["items"][0]
+        self.assertEqual(issue_payload["id"], raw_issue.id)
+        self.assertEqual(issue_payload["expected_paper_count"], 1)
+        self.assertEqual(issue_payload["title_collected_count"], 1)
+        self.assertEqual(issue_payload["abstract_collected_count"], 1)
+        self.assertEqual(issue_payload["fulltext_collected_count"], 1)
 
         detail = self.client.get(f"/api/raw-issues/{raw_issue.id}")
         self.assertEqual(detail.status_code, 200)
-        self.assertEqual(detail.get_json()["data"]["id"], raw_issue.id)
+        detail_payload = detail.get_json()["data"]
+        self.assertEqual(detail_payload["id"], raw_issue.id)
+        self.assertEqual(detail_payload["papers"][0]["literature_id"], literature.id)
+        self.assertEqual(detail_payload["papers"][0]["pdf_path"], "uploads/pdfs/1.pdf")
 
         papers = self.client.get(f"/api/raw-issues/{raw_issue.id}/papers")
         self.assertEqual(papers.status_code, 200)

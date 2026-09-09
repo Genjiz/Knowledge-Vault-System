@@ -232,7 +232,7 @@ class MagtechSourceContractTestCase(unittest.TestCase):
         self.assertEqual(first["doi"], "10.3772/j.issn.1000-0135.2026.07.001")
         self.assertEqual(first["source_identifier"], "10.3772/j.issn.1000-0135.2026.07.001")
         self.assertEqual(json.loads(first["source_ref_json"]), {"article_id": "1044"})
-        self.assertEqual(first["detail_url"], "https://qbxb.istic.ac.cn/CN/abstract/article_1044.shtml")
+        self.assertEqual(first["detail_url"], "https://qbxb.istic.ac.cn/CN/abstract/abstract1044.shtml")
         self.assertEqual(first["published_at"], "2026-07-24")
         self.assertEqual(first["sort_index"], 0)
         self.assertEqual(first["translation_status"], "completed")

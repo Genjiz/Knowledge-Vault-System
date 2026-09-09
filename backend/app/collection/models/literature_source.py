@@ -22,7 +22,7 @@ class LiteratureSource(BaseModel):
     )
     source_type = db.Column(db.String(50), nullable=False, index=True)
 
-    literature = db.relationship("Literature", back_populates="collection_sources")
+    literature = db.relationship("Literature", back_populates="collection_sources", lazy="joined")
     raw_paper = db.relationship("RawPaper", back_populates="literature_sources")
 
     def to_dict(self):

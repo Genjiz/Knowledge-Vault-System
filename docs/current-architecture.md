@@ -27,13 +27,13 @@
 
 蓝图前缀：`/api/literatures`、`/api/paper-analyses`、`/api/llm`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/fulltext-tasks`、`/api/journals`、`/api/collection`、`/api/video-note-tasks`、`/api/health`。
 
-数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。已应用迁移：初始基线 `1100434363a6`、期刊与溯源 `c9b826cfa1c0`、采集源身份统一 `a3f7c1d92e05`、期刊区域字段 `c4e2a9f81b37`、多来源文献溯源 `d7b9e4a12f60`、Magtech 全文采集 `e84f3c9a61b2`、模型平台与论文分析 `5703b05951aa`。
+数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。已应用迁移：初始基线 `1100434363a6`、期刊与溯源 `c9b826cfa1c0`、采集源身份统一 `a3f7c1d92e05`、期刊区域字段 `c4e2a9f81b37`、多来源文献溯源 `d7b9e4a12f60`、Magtech 全文采集 `e84f3c9a61b2`、模型平台与论文分析 `5703b05951aa`、期号预期篇数与 Magtech URL 修复 `f6a1c2d3e4b5`。
 
 ## 数据模型
 
 - 统一论文实体：`literature`（题录 + `journal_id`；`user_edited_fields_json` 记录人工保护字段，`field_sources_json` 记录当前各字段来源；旧字段 `source` / `source_raw_paper_id` 保留兼容；`pdf_path` 可选，`pdf_source_type` / `pdf_source_raw_paper_id` / `pdf_sha256` / `pdf_size_bytes` 记录当前 PDF 来源与文件元数据）
 - 期刊一等实体：`journal`（name 唯一、issn、publisher、region 区域为显式字段，决定可选源范围与论文语言语义）；`journal_source_config`（期刊-采集源配置，source_id 取自采集源注册表且区域须与期刊一致，含 enabled / is_default / config_json / 最近测试结果）
-- 采集原始记录：`raw_issue`（source_type 存真实采集源 id + region 区域）、`raw_paper`（保留为审计/重跑层，含 doi 与 `source_ref_json` 稳定源引用，入库时向 `literature` upsert 合并）
+- 采集原始记录：`raw_issue`（source_type 存真实采集源 id + region 区域；`expected_paper_count` 保存来源报告的应有篇数，缺失或非法时回退到本次采集篇数；API 另按非空题名、非空摘要和关联文献 PDF 实时返回三项完成数）、`raw_paper`（保留为审计/重跑层，含 doi 与 `source_ref_json` 稳定源引用，入库时向 `literature` upsert 合并；API 同时返回关联统一文献 id 与 PDF 路径）
 - 多来源关联：`literature_source`（一条 raw_paper 只关联一条 literature，一条 literature 可关联多个来源；删除 raw_paper 时级联删除关联）
 - 采集核心表：`crawl_task`（source_type + region）、`crawl_task_log`、`raw_issue_analysis`、`llm_run`
 - 模型平台：`llm_profile` 保存协议、Base URL、模型名、启用状态和测试结果；`llm_scene_binding` 为论文分析、论文翻译、视频笔记绑定默认模型。API Key 不入库。
@@ -80,7 +80,7 @@
 - `/paper-analysis` 支持按单期、多期或多篇论文选择；期号按统一文献的期刊文本、年份、期号展开，采集与手工导入论文按 `literature_id` 去重。
 - 分析任务由 `TaskExecutor` 异步运行，按输入字符数在论文边界分批；多批结果再次综合并落库，同时写入 `backend/data/artifacts/paper-analysis/<task_id>/analysis.md`。
 
-Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 配置接入）：年页 `showTenYearVolumnDetail.do?nian={year}` → 期页 `volumn_{id}.shtml` → 文章 id → `getTxtFile.do?fileType=BibTeX`（题录/关键词/DOI）与 `fileType=EndNote`（摘要），每篇 2 个请求，无需浏览器。标题中的 `bold` / `italic` / `sup` / `sub` 仅在标签严格成对且正确嵌套时清除；未配对、错误嵌套或未知标签保留原文并记录 warning。全文使用稳定 article_id 请求 `downloadArticleFile.do?attachType=PDF&id=<article_id>`；响应需以 `%PDF-` 开头且不超过 100 MB，验证后通过同目录临时文件原子替换。已实测情报学报官网 PDF 接口返回有效 `%PDF-1.4` 文件。
+Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 配置接入）：年页 `showTenYearVolumnDetail.do?nian={year}` → 期页 `volumn_{id}.shtml` → 文章 id → `getTxtFile.do?fileType=BibTeX`（题录/关键词/DOI）与 `fileType=EndNote`（摘要），每篇 2 个请求，无需浏览器。论文外部页按文章 id 固定生成 `/CN/abstract/abstract{id}.shtml`，不采用 BibTeX 中可能落入软 404 的 `/CN/abstract/article_{id}.shtml`；迁移同时规范化已有原始论文和统一文献 URL。标题中的 `bold` / `italic` / `sup` / `sub` 仅在标签严格成对且正确嵌套时清除；未配对、错误嵌套或未知标签保留原文并记录 warning。全文使用稳定 article_id 请求 `downloadArticleFile.do?attachType=PDF&id=<article_id>`；响应需以 `%PDF-` 开头且不超过 100 MB，验证后通过同目录临时文件原子替换。已实测情报学报官网 PDF 接口返回有效 `%PDF-1.4` 文件。
 
 全文采集与题录合并相互独立：采集台可勾选题录完成后补采全文，但后台仍先同步完成题录，再创建异步全文任务；PDF 失败不回滚题录。批量任务跳过已有 PDF；用户上传 PDF 永不被自动覆盖；单篇重新获取只能替换当前 Magtech PDF。同一期号删除或重采时保留已下载 PDF，只把失效的 raw_paper 引用置空。
 
@@ -108,7 +108,7 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 | `/video-notes`、`/video-notes/tasks`、`/video-notes/tasks/<id>` | 视频任务创建、列表、状态、日志与产物 |
 | `/settings/models` | 模型档案、连接测试与场景默认模型 |
 
-期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。两页靠链接互相跳转，期刊未配置可用源时采集台禁用提交并给出配置入口。Magtech 题录采集可勾选完成后补采全文；期号库和详情提供「分析本期」快捷入口，模型生成操作统一在论文分析页执行；文献详情可单篇获取/重新获取 Magtech PDF，并展示题录字段来源、PDF 来源和全文任务状态。
+期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。两页靠链接互相跳转，期刊未配置可用源时采集台禁用提交并给出配置入口。Magtech 题录采集可勾选完成后补采全文；期号库按期分别展示「应有 / 标题 / 摘要 / 全文」四项数量，不为国内期刊显示无操作价值的翻译状态。期号库和详情提供次级样式的「分析本期」快捷入口，模型生成操作统一在论文分析页执行；期号详情的论文展开项可打开期刊原文页，关联文献存在本地 PDF 时可直接阅读全文。文献详情可单篇获取/重新获取 Magtech PDF，并展示题录字段来源、PDF 来源和全文任务状态。
 
 ## 数据与产物
 

@@ -275,6 +275,10 @@ a {
 .icon-button:hover {
   background: #eef2f7;
 }
+.icon-only-button {
+  width: 38px;
+  padding: 0;
+}
 .field {
   min-width: 0;
   display: flex;
@@ -733,6 +737,30 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.issue-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+}
+.issue-progress span {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 6px;
+  border-right: 1px solid #e2e8f0;
+  color: #718198;
+  font-size: 11px;
+}
+.issue-progress span:last-child {
+  border-right: 0;
+}
+.issue-progress strong {
+  color: #172033;
+  font-size: 14px;
 }
 .paper-item {
   border: 1px solid #e2e8f0;

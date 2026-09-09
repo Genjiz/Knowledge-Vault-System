@@ -37,6 +37,14 @@ class RawPaper(BaseModel):
     )
 
     def to_dict(self):
+        literature = next(
+            (
+                source.literature
+                for source in self.literature_sources
+                if source.literature is not None
+            ),
+            None,
+        )
         data = super().to_dict()
         data.update(
             {
@@ -55,6 +63,8 @@ class RawPaper(BaseModel):
                 "published_at": self.published_at,
                 "sort_index": self.sort_index,
                 "translation_status": self.translation_status,
+                "literature_id": literature.id if literature else None,
+                "pdf_path": literature.pdf_path if literature else None,
             }
         )
         return data

@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { BrainCircuit, Download, Play, RefreshCw, Settings2, Trash2 } from 'lucide-react'
+import {
+  BrainCircuit,
+  Download,
+  ExternalLink,
+  FileText,
+  Play,
+  RefreshCw,
+  Settings2,
+  Trash2,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { FullTextTask, Journal, ProbeIssue, RawIssue, SourceMeta } from '@/api/types'
@@ -273,7 +282,7 @@ export function JournalSourcesPage() {
                     配置
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     disabled={!journal.sources.some((source) => source.enabled)}
                     onClick={() =>
                       location.assign(
@@ -285,7 +294,10 @@ export function JournalSourcesPage() {
                     去采集
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="danger"
+                    className="icon-only-button"
+                    aria-label={`删除 ${journal.name}`}
+                    title="删除期刊"
                     onClick={() => {
                       if (confirm(`确定删除《${journal.name}》吗？`)) remove.mutate(journal.id)
                     }}
@@ -726,7 +738,7 @@ export function RawIssueListPage() {
               <Button variant="secondary" asChild>
                 <Link to="/crawler/tasks">返回任务台</Link>
               </Button>
-              <Button asChild>
+              <Button variant="secondary" asChild>
                 <Link to="/paper-analysis">
                   <BrainCircuit size={16} />
                   论文分析
@@ -762,24 +774,20 @@ export function RawIssueListPage() {
                       </strong>
                       <Badge>{regionLabel(item.region)}</Badge>
                     </div>
-                    <p className="muted">
-                      {item.source_type} · 论文 {item.paper_count || 0} 篇
-                    </p>
-                    <div className="actions">
-                      <Badge
-                        tone={
-                          item.region === 'domestic' || item.translation_status === 'completed'
-                            ? 'success'
-                            : 'warning'
-                        }
-                      >
-                        翻译：
-                        {item.region === 'domestic'
-                          ? '不需要'
-                          : item.translation_status === 'completed'
-                            ? '已完成'
-                            : '未完成'}
-                      </Badge>
+                    <p className="muted">{item.source_type}</p>
+                    <div className="issue-progress">
+                      <span>
+                        应有 <strong>{item.expected_paper_count || 0}</strong>
+                      </span>
+                      <span>
+                        标题 <strong>{item.title_collected_count || 0}</strong>
+                      </span>
+                      <span>
+                        摘要 <strong>{item.abstract_collected_count || 0}</strong>
+                      </span>
+                      <span>
+                        全文 <strong>{item.fulltext_collected_count || 0}</strong>
+                      </span>
                     </div>
                     <div className="actions mt-4">
                       <Button variant="secondary" asChild>
@@ -787,7 +795,7 @@ export function RawIssueListPage() {
                           查看详情
                         </Link>
                       </Button>
-                      <Button asChild>
+                      <Button variant="secondary" asChild>
                         <a
                           href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
                         >
@@ -872,11 +880,10 @@ export function RawIssueDetailPage() {
         description={`${item.year} 年 · 第 ${item.issue} 期${item.volume ? ` · Vol.${item.volume}` : ''}`}
         metrics={[
           { label: 'Source', value: item.source_type },
-          { label: 'Papers', value: item.paper_count || 0 },
-          {
-            label: 'Translation',
-            value: isDomestic ? 'N/A' : item.translation_status || 'pending',
-          },
+          { label: 'Expected', value: item.expected_paper_count || 0 },
+          { label: 'Titles', value: item.title_collected_count || 0 },
+          { label: 'Abstracts', value: item.abstract_collected_count || 0 },
+          { label: 'Full Text', value: item.fulltext_collected_count || 0 },
         ]}
       />
       <div className="actions justify-between">
@@ -893,6 +900,7 @@ export function RawIssueDetailPage() {
           )}
           {item.source_type === 'magtech' && (
             <Button
+              variant="secondary"
               disabled={acquireFulltext.isPending || isFullTextRunning(latestFulltextTask)}
               onClick={() => acquireFulltext.mutate()}
             >
@@ -900,7 +908,7 @@ export function RawIssueDetailPage() {
               {isFullTextRunning(latestFulltextTask) ? '全文下载中' : '补采本期全文'}
             </Button>
           )}
-          <Button asChild>
+          <Button variant="secondary" asChild>
             <a
               href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
             >
@@ -970,11 +978,24 @@ export function RawIssueDetailPage() {
                     {paper.doi ? ` · DOI ${paper.doi}` : ''}
                   </p>
                   <p className="prose whitespace-pre-wrap">{abstract || '暂无摘要'}</p>
-                  {paper.detail_url && (
-                    <a href={paper.detail_url} target="_blank" rel="noreferrer">
-                      打开论文页面
-                    </a>
-                  )}
+                  <div className="actions mt-4">
+                    {paper.detail_url && (
+                      <Button variant="secondary" asChild>
+                        <a href={paper.detail_url} target="_blank" rel="noreferrer">
+                          <ExternalLink size={15} />
+                          打开期刊原文页
+                        </a>
+                      </Button>
+                    )}
+                    {paper.pdf_path && (
+                      <Button variant="secondary" asChild>
+                        <a href={`/${paper.pdf_path}`} target="_blank" rel="noreferrer">
+                          <FileText size={15} />
+                          阅读全文 PDF
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </details>
             )

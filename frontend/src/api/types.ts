@@ -128,6 +128,8 @@ export interface RawPaper {
   abstract?: string
   abstract_zh?: string
   detail_url?: string
+  literature_id?: number
+  pdf_path?: string
   translation_status?: string
   keywords?: string
   doi?: string
@@ -142,7 +144,11 @@ export interface RawIssue {
   issue: string
   volume?: string
   source_url?: string
+  expected_paper_count?: number
   paper_count?: number
+  title_collected_count?: number
+  abstract_collected_count?: number
+  fulltext_collected_count?: number
   translation_status?: string
   analysis_status?: string
   papers?: RawPaper[]

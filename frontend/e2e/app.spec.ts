@@ -29,6 +29,10 @@ const sampleIssue = {
   volume: '45',
   source_url: 'https://example.com/issue',
   paper_count: 1,
+  expected_paper_count: 2,
+  title_collected_count: 1,
+  abstract_collected_count: 1,
+  fulltext_collected_count: 1,
   translation_status: 'completed',
   analysis_status: 'completed',
   papers: [
@@ -40,6 +44,9 @@ const sampleIssue = {
       abstract: 'Abstract',
       abstract_zh: '摘要',
       pages: '1-10',
+      detail_url: 'https://example.com/paper',
+      literature_id: 1,
+      pdf_path: 'uploads/pdfs/1.pdf',
     },
   ],
 }
@@ -459,11 +466,38 @@ test('论文分析可以按期号选择并创建任务', async ({ page }) => {
 test('期刊页不再暴露内置清单，期号详情提供独立分析入口', async ({ page }) => {
   await page.goto('/crawler/journals')
   await expect(page.getByRole('button', { name: '导入内置清单' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '配置' })).toHaveClass(/button--secondary/)
+  await expect(page.getByRole('button', { name: '去采集' })).toHaveClass(/button--secondary/)
+  await expect(page.getByRole('button', { name: '删除 情报学报' })).toHaveClass(/button--danger/)
+
+  await page.goto('/crawler/issues')
+  await expect(page.getByText('应有 2')).toBeVisible()
+  await expect(page.getByText('标题 1')).toBeVisible()
+  await expect(page.getByText('摘要 1')).toBeVisible()
+  await expect(page.getByText('全文 1')).toBeVisible()
+  await expect(page.getByText('翻译：不需要')).toHaveCount(0)
+  await expect(page.getByRole('main').getByRole('link', { name: '论文分析' })).toHaveClass(
+    /button--secondary/,
+  )
+  await expect(page.getByRole('link', { name: '分析本期' })).toHaveClass(/button--secondary/)
+
   await page.goto('/crawler/issues/1')
   await expect(page.getByRole('link', { name: '分析本期' })).toHaveAttribute(
     'href',
     /paper-analysis/,
   )
+  await expect(page.getByRole('link', { name: '分析本期' })).toHaveClass(/button--secondary/)
+  await expect(page.getByRole('button', { name: '补采本期全文' })).toHaveClass(/button--secondary/)
+  await page.locator('.paper-item summary').click()
+  await expect(page.getByRole('link', { name: '打开期刊原文页' })).toHaveAttribute(
+    'href',
+    'https://example.com/paper',
+  )
+  await expect(page.getByRole('link', { name: '阅读全文 PDF' })).toHaveAttribute(
+    'href',
+    '/uploads/pdfs/1.pdf',
+  )
+  await expect(page.getByText('打开论文页面')).toHaveCount(0)
   await expect(page.getByRole('button', { name: '生成分析' })).toHaveCount(0)
 })
 

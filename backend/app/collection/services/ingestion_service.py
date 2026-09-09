@@ -122,6 +122,13 @@ class IngestionService:
             issue=issue_data["issue"],
         )
 
+        try:
+            expected_paper_count = int(issue_data.get("paper_count_hint"))
+            if expected_paper_count < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            expected_paper_count = len(papers)
+
         raw_issue_data = {
             "source_type": issue_data["source_type"],
             "region": issue_data.get("region") or getattr(task, "region", None),
@@ -132,6 +139,7 @@ class IngestionService:
             "volume": issue_data.get("volume"),
             "language": issue_data.get("language", "mixed"),
             "source_url": issue_data.get("source_url"),
+            "expected_paper_count": expected_paper_count,
             "paper_count": len(papers),
             "crawl_task_id": task.id,
         }

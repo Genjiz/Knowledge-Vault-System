@@ -25,6 +25,7 @@ class RawIssue(BaseModel):
     volume = db.Column(db.String(50))
     language = db.Column(db.String(20), default="mixed")
     source_url = db.Column(db.String(1000))
+    expected_paper_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     paper_count = db.Column(db.Integer, nullable=False, default=0)
     translation_status = db.Column(db.String(32), nullable=False, default="pending")
     analysis_status = db.Column(db.String(32), nullable=False, default="pending")
@@ -53,6 +54,15 @@ class RawIssue(BaseModel):
     )
 
     def to_dict(self):
+        title_collected_count = sum(bool((paper.title or "").strip()) for paper in self.papers)
+        abstract_collected_count = sum(bool((paper.abstract or "").strip()) for paper in self.papers)
+        fulltext_collected_count = sum(
+            any(
+                source.literature and bool(source.literature.pdf_path)
+                for source in paper.literature_sources
+            )
+            for paper in self.papers
+        )
         data = super().to_dict()
         data.update(
             {
@@ -65,7 +75,15 @@ class RawIssue(BaseModel):
                 "volume": self.volume,
                 "language": self.language,
                 "source_url": self.source_url,
+                "expected_paper_count": (
+                    self.expected_paper_count
+                    if self.expected_paper_count is not None
+                    else self.paper_count or 0
+                ),
                 "paper_count": self.paper_count,
+                "title_collected_count": title_collected_count,
+                "abstract_collected_count": abstract_collected_count,
+                "fulltext_collected_count": fulltext_collected_count,
                 "translation_status": self.translation_status,
                 "analysis_status": self.analysis_status,
                 "raw_json_path": self.raw_json_path,

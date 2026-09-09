@@ -310,7 +310,8 @@ class MagtechSource(SourceAdapter):
             return None
 
         abstract = extra["abstract"]
-        detail_url = metadata["url"] or ABSTRACT_PAGE_URL.format(base=self.base_url, article_id=article_id)
+        # BibTeX 的 url 可能仍使用会落入软 404 的 article_{id} 旧格式。
+        detail_url = ABSTRACT_PAGE_URL.format(base=self.base_url, article_id=article_id)
         doi = metadata["doi"]
         return {
             "source_identifier": doi or detail_url,
