@@ -16,11 +16,11 @@
 - 做法：环境重建统一以 `backend/requirements.txt` 为准（`.venv\Scripts\python.exe -m pip install -r backend/requirements.txt`）；提交 `.venv` 仅为同机快照，跨机异常时重建而不是排障。
 - 适用范围：所有 Python 环境迁移与重建场景。
 
-## L-003 采集浏览器探测仅覆盖 Chrome/Chromium，Edge 需显式指定
+## L-003 采集浏览器探测需覆盖实际使用的 Chromium 发行版
 
 - 日期：2026-08-30
-- 现象：`app/crawler/runtime/paths.py` 的 `find_chrome_executable()` 只探测 Chrome/Chromium 常见安装路径；本机浏览器为 Edge（Chromium 内核，`msedge.exe` 不在探测列表）。
-- 做法：需要使用 Edge 时，通过环境变量 `CRAWLER_BROWSER_PATH` 指定，或经用户确认后调整代码；不要假设 DrissionPage 能自动找到 Edge。
+- 现象：浏览器探测只覆盖 Chrome/Chromium 时，本机仅安装 Edge 会导致 DrissionPage 人工接管分支无法启动，即使 Edge 同样基于 Chromium。
+- 做法：公共路径探测同时覆盖 Chrome、Chromium、Edge 的 x64/x86 常见路径，并保留 `CRAWLER_BROWSER_PATH` 显式覆盖；新增发行版候选前用真实可见浏览器 smoke test 验证。
 - 适用范围：采集中心所有浏览器自动化场景。
 
 ## L-004 全量测试套件会触发 safe-delete 批量删除守卫
@@ -81,3 +81,10 @@
 - 现象：需要跑一次真实采集验证端到端链路，但直接跑会往正式运行数据（`backend/data/db/app.db`，随仓库提交）写入真实数据与产物，事后难以干净回退。
 - 做法：把正式库复制到 `tmp/<场景>/db/app.db`，用环境变量 `DATA_ROOT` 指向 `tmp/<场景>` 后再 `create_app()`——`app/core/paths.py` 的 `data_root()` 在运行时读取该变量，数据库、上传、产物三类目录会整体重定向。验证脚本本身也放 `tmp/`。
 - 适用范围：所有需要真实外部调用、又不希望污染运行数据的端到端验证。
+
+## L-012 ScienceDirect 的 Cloudflare CPE 错误不能当作验证码
+
+- 日期：2026-09-15
+- 现象：对 ScienceDirect 文章页和 `/pdfft` 地址发起普通 HTTP 请求时，当前出口返回 HTTP 403、`server=cloudflare` 和 HTML 错误码 `CPE00001`。即使用户已在受控 Edge 完成机构登录、文章页显示 `View PDF`，PDF 资产域仍可能进入持续 Turnstile，动态链接转入同 Cookie 的 HTTP 会话后也继续返回 `CPE00001`。
+- 做法：先按响应正文和状态区分 `access_blocked`、`verification_required` 与 `access_denied`。`CPE00001` 立即暂停整批并提示切换校园网/aTrust/VPN；只有明确且可人工完成的 challenge 才打开可见的持久 profile 浏览器。challenge 持续卡住时停止重试，不增加自动求解、隐身或规避逻辑。三类错误都不得进入普通网络重试循环。
+- 适用范围：ScienceDirect 及其他同时存在 CDN 风控、交互式人机校验和机构订阅控制的全文网页。

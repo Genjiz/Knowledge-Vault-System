@@ -115,6 +115,7 @@ export const fulltextApi = {
     ),
   createForIssue: (id: string | number) =>
     data<FullTextTask>(api.post(`/raw-issues/${id}/fulltext-tasks`)),
+  resume: (id: string | number) => data<FullTextTask>(api.post(`/fulltext-tasks/${id}/resume`)),
 }
 export const llmApi = {
   profiles: () => data<LLMProfile[]>(api.get('/llm/profiles')),

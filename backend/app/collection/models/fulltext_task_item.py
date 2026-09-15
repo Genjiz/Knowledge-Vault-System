@@ -25,7 +25,9 @@ class FullTextTaskItem(BaseModel):
     )
     source_type = db.Column(db.String(50), nullable=False)
     source_url = db.Column(db.String(1000))
+    action_url = db.Column(db.String(1000))
     status = db.Column(db.String(32), nullable=False, default="pending", index=True)
+    failure_code = db.Column(db.String(50), index=True)
     error_message = db.Column(db.Text)
     pdf_path = db.Column(db.String(500))
     file_size_bytes = db.Column(db.BigInteger)
@@ -47,7 +49,9 @@ class FullTextTaskItem(BaseModel):
                 "raw_paper_id": self.raw_paper_id,
                 "source_type": self.source_type,
                 "source_url": self.source_url,
+                "action_url": self.action_url,
                 "status": self.status,
+                "failure_code": self.failure_code,
                 "error_message": self.error_message,
                 "pdf_path": self.pdf_path,
                 "file_size_bytes": self.file_size_bytes,

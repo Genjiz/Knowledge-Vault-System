@@ -91,3 +91,15 @@ def get_fulltext_task(task_id):
     if task is None:
         return error_response("全文任务不存在", 404)
     return success_response(task.to_dict())
+
+
+@fulltext_task_bp.route("/api/fulltext-tasks/<int:task_id>/resume", methods=["POST"])
+def resume_fulltext_task(task_id):
+    try:
+        task = get_fulltext_service().resume_task(task_id)
+    except FullTextConflictError as exc:
+        return error_response(str(exc), 409)
+    except FullTextError as exc:
+        return error_response(str(exc), 404)
+    schedule_fulltext_task(task.id)
+    return success_response(task.to_dict())

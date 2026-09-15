@@ -52,14 +52,25 @@ class FullTextServiceTestCase(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
-    def _seed_paper(self, title="官网论文", article_id="1044", pdf_path=None, pdf_source=None):
+    def _seed_paper(
+        self,
+        title="官网论文",
+        article_id="1044",
+        pdf_path=None,
+        pdf_source=None,
+        source_type="magtech",
+        source_ref=None,
+        detail_url=None,
+    ):
         from app.collection.models import LiteratureSource, RawIssue, RawPaper
         from app.papers.models import Literature
 
         issue = RawIssue(
-            source_type="magtech",
-            region="domestic",
-            journal_name="情报学报",
+            source_type=source_type,
+            region="foreign" if source_type == "scopus" else "domestic",
+            journal_name=(
+                "Information Processing & Management" if source_type == "scopus" else "情报学报"
+            ),
             year=2026,
             issue="7",
             paper_count=1,
@@ -69,10 +80,10 @@ class FullTextServiceTestCase(unittest.TestCase):
         raw_paper = RawPaper(
             raw_issue_id=issue.id,
             source_identifier=f"10.1000/{article_id}",
-            source_ref_json=json.dumps({"article_id": article_id}),
+            source_ref_json=json.dumps(source_ref or {"article_id": article_id}),
             title=title,
             authors="作者",
-            detail_url=f"https://example.com/CN/abstract/article_{article_id}.shtml",
+            detail_url=detail_url or f"https://example.com/CN/abstract/article_{article_id}.shtml",
         )
         literature = Literature(
             title=title,
@@ -87,7 +98,7 @@ class FullTextServiceTestCase(unittest.TestCase):
             LiteratureSource(
                 literature_id=literature.id,
                 raw_paper_id=raw_paper.id,
-                source_type="magtech",
+                source_type=source_type,
             )
         )
         db.session.commit()
@@ -113,6 +124,70 @@ class FullTextServiceTestCase(unittest.TestCase):
         pdf_path = self.temp_dir / literature.pdf_path
         self.assertEqual(pdf_path.read_bytes(), source.payload)
         self.assertFalse(list(pdf_path.parent.glob("*.part-*")))
+
+    def test_scopus_pii_uses_sciencedirect_provider(self):
+        from app.collection.services.fulltext_service import FullTextService
+
+        _, raw_paper, literature = self._seed_paper(
+            source_type="scopus",
+            source_ref={"pii": "S0306457326003201", "doi": "10.1016/example"},
+            detail_url="https://www.sciencedirect.com/science/article/pii/S0306457326003201",
+        )
+        source = FakePdfSource()
+        calls = []
+
+        def source_factory(source_type, journal_name):
+            calls.append((source_type, journal_name))
+            return source
+
+        service = FullTextService(source_factory=source_factory)
+        task = service.create_single_task(literature.id)
+        service.run_task(task.id)
+        db.session.refresh(literature)
+
+        self.assertEqual(task.source_type, "sciencedirect")
+        self.assertEqual(task.items[0].source_type, "sciencedirect")
+        self.assertEqual(source.calls, [{"pii": "S0306457326003201", "doi": "10.1016/example"}])
+        self.assertEqual(calls, [("sciencedirect", "Information Processing & Management")])
+        self.assertEqual(literature.pdf_source_type, "sciencedirect")
+        self.assertEqual(literature.pdf_source_raw_paper_id, raw_paper.id)
+
+    def test_human_verification_pauses_and_resumes_same_task(self):
+        from app.collection.fulltext.base import HumanVerificationRequired
+        from app.collection.services.fulltext_service import FullTextService
+
+        _, _, literature = self._seed_paper(
+            source_type="scopus",
+            source_ref={"pii": "S0306457326003201"},
+        )
+        source = FakePdfSource(
+            HumanVerificationRequired(
+                "需要在受控浏览器中完成人机验证",
+                action_url="https://www.sciencedirect.com/science/article/pii/S0306457326003201",
+            )
+        )
+        service = FullTextService(source_factory=lambda *_: source)
+        task = service.create_single_task(literature.id)
+
+        service.run_task(task.id)
+        db.session.refresh(task)
+
+        self.assertEqual(task.status, "waiting_user")
+        self.assertEqual(task.items[0].status, "waiting_user")
+        self.assertEqual(task.items[0].failure_code, "verification_required")
+        self.assertIn("sciencedirect.com", task.items[0].action_url)
+        self.assertIsNone(task.finished_at)
+
+        source.payload = b"%PDF-1.7\nverified"
+        resumed = service.resume_task(task.id)
+        self.assertEqual(resumed.status, "pending")
+        service.run_task(task.id)
+        db.session.refresh(task)
+
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(task.items[0].status, "completed")
+        self.assertIsNone(task.items[0].failure_code)
+        self.assertIsNone(task.items[0].action_url)
 
     def test_issue_task_skips_existing_user_pdf_and_downloads_missing_pdf(self):
         from app.collection.models import LiteratureSource, RawPaper
@@ -174,8 +249,24 @@ class FullTextServiceTestCase(unittest.TestCase):
 
         self.assertEqual(task.status, "failed")
         self.assertEqual(task.failed_count, 1)
+        self.assertEqual(task.items[0].failure_code, "not_pdf")
         self.assertIsNone(literature.pdf_path)
         self.assertEqual(list((self.temp_dir / "uploads" / "pdfs").glob("*")), [])
+
+    def test_oversized_download_has_specific_failure_code(self):
+        from app.collection.services.fulltext_service import FullTextService
+
+        _, _, literature = self._seed_paper()
+        service = FullTextService(
+            source_factory=lambda *_: FakePdfSource(b"%PDF-" + b"x" * 20),
+            max_pdf_size=10,
+        )
+
+        task = service.create_single_task(literature.id)
+        service.run_task(task.id)
+
+        self.assertEqual(task.status, "failed")
+        self.assertEqual(task.items[0].failure_code, "too_large")
 
     def test_issue_task_records_partial_status_when_only_some_downloads_succeed(self):
         from app.collection.models import LiteratureSource, RawPaper

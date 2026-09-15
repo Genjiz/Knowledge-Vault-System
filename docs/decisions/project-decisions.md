@@ -209,3 +209,11 @@
 - 内容：移除场景默认模型绑定。论文分析、论文翻译、视频笔记及保留的期号分析接口都必须接收具体 `profile_id`，任务保存模型档案引用与模型名称快照；`paper_analysis`、`paper_translation`、`video_note` 等场景名只用于 Prompt 和调用类型分类。采集服务密钥迁入 Collection 下的独立采集设置页面。
 - 理由：当前大模型任务均由用户主动发起，隐藏的场景默认值会让用户无法判断实际模型；在操作位置选择具体模型更直接，也能保证历史任务可追溯。采集服务凭据与模型访问密钥属于不同业务域，不应混在同一设置页面。
 - 影响：删除 `llm_scene_binding`、场景绑定 API 和前端配置区；翻译期号与视频任务增加模型快照字段；`/settings/models` 仅管理模型档案，`/crawler/settings` 管理采集服务密钥。
+
+## D-027 外文全文与题录来源解耦并支持人工恢复
+
+- 状态：已生效
+- 日期：2026-09-15
+- 内容：外文 PDF 首期只支持 ScienceDirect。Scopus 继续作为题录来源，独立全文提供器按 raw_paper 的 PII 解析 ScienceDirect，不把所有 Scopus 论文视为 Elsevier 全文。人机 challenge 或网络出口限制会暂停整批任务为 `waiting_user`，保存稳定失败码和公开文章 URL，用户处理后从当前条目恢复；程序不求解验证码、不绕过登录、订阅或访问控制。Cloudflare `CPE00001` 与交互式 challenge 分开分类。
+- 理由：同一题录库覆盖多个出版社，题录来源不能决定全文站点；网页下载的登录态、风控和订阅失败具有不同恢复动作，普通异常重试会扩大封禁风险并丢失任务进度。
+- 影响：新增 `collection/fulltext` 提供器层、受控 Chromium 会话、`failure_code` / `action_url`、`waiting_user` 状态和全文任务恢复 API；Magtech 使用同一任务编排，现有 PDF 覆盖保护保持不变。

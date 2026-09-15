@@ -1,11 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { BookOpen, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  BookOpen,
+  Download,
+  ExternalLink,
+  FileText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
-import type { FullTextTask, Note } from '@/api/types'
+import type { Note } from '@/api/types'
 import { folderApi, fulltextApi, literatureApi, noteApi, tagApi } from '@/api/resources'
 import {
   Badge,
@@ -23,6 +32,12 @@ import {
   Textarea,
 } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import {
+  fullTextActionLabel,
+  fullTextStatusLabel,
+  isFullTextActive,
+  isFullTextRunning,
+} from '@/lib/fulltext'
 import {
   literatureFormDefaults,
   literatureFormSchema,
@@ -67,20 +82,18 @@ function dataSourceName(value?: string) {
   return value ? dataSourceNames[value] || value : ''
 }
 
-function isFullTextRunning(task?: FullTextTask) {
-  return task?.status === 'pending' || task?.status === 'running'
-}
-
 function pdfSourceName(value?: string | null) {
   if (value === 'user') return '用户上传'
   if (value === 'magtech') return '期刊官网'
+  if (value === 'sciencedirect') return 'ScienceDirect'
   return value || '未记录'
 }
 
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === '已读完' || status === 'completed') return 'success'
   if (status === '正在阅读') return 'info'
-  if (['摘要浏览', 'pending', 'running', 'partial'].includes(status || '')) return 'warning'
+  if (['摘要浏览', 'pending', 'running', 'waiting_user', 'partial'].includes(status || ''))
+    return 'warning'
   if (status === '需要重读' || status === 'failed') return 'danger'
   return 'neutral'
 }
@@ -757,11 +770,23 @@ export function LiteratureDetailPage() {
     mutationFn: () =>
       fulltextApi.createForLiterature(
         id,
-        Boolean(detail.data?.pdf_path && detail.data.pdf_source_type === 'magtech'),
+        Boolean(
+          detail.data?.pdf_path &&
+          ['magtech', 'sciencedirect'].includes(detail.data.pdf_source_type || ''),
+        ),
       ),
     onSuccess: async (task) => {
       client.setQueryData(['fulltext-tasks', 'literature', id], [task])
-      toast.success('官网全文任务已开始')
+      toast.success('全文任务已开始')
+      await client.invalidateQueries({ queryKey: ['fulltext-tasks', 'literature', id] })
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const resumeFulltext = useMutation({
+    mutationFn: () => fulltextApi.resume(fulltextTasks.data?.[0]?.id || 0),
+    onSuccess: async (task) => {
+      client.setQueryData(['fulltext-tasks', 'literature', id], [task])
+      toast.success('全文任务已继续')
       await client.invalidateQueries({ queryKey: ['fulltext-tasks', 'literature', id] })
     },
     onError: (error) => toast.error(error.message),
@@ -772,11 +797,16 @@ export function LiteratureDetailPage() {
   const literature = detail.data,
     filtered = (notes.data || []).filter((note) => noteType === 'all' || note.type === noteType),
     latestFulltextTask = fulltextTasks.data?.[0],
-    hasMagtechSource = Boolean(
-      literature.collection_sources?.some((source) => source.source_type === 'magtech'),
+    availableSourceTypes = new Set(
+      (literature.collection_sources || []).map((source) => source.source_type),
     ),
+    hasOnlineSource = availableSourceTypes.has('magtech') || availableSourceTypes.has('scopus'),
     canAcquireFulltext =
-      hasMagtechSource && (!literature.pdf_path || literature.pdf_source_type === 'magtech')
+      hasOnlineSource &&
+      (!literature.pdf_path ||
+        (literature.pdf_source_type === 'magtech' && availableSourceTypes.has('magtech')) ||
+        (literature.pdf_source_type === 'sciencedirect' && availableSourceTypes.has('scopus'))),
+    waitingFulltextItem = latestFulltextTask?.items.find((item) => item.status === 'waiting_user')
   const showNote = (type: string, note?: Note) => {
     setEditing(note || null)
     setDraft(
@@ -909,11 +939,11 @@ export function LiteratureDetailPage() {
               {canAcquireFulltext && (
                 <Button
                   variant="secondary"
-                  disabled={acquireFulltext.isPending || isFullTextRunning(latestFulltextTask)}
+                  disabled={acquireFulltext.isPending || isFullTextActive(latestFulltextTask)}
                   onClick={() => {
                     if (
                       !literature.pdf_path ||
-                      confirm('确定重新从期刊官网下载并替换当前官网 PDF 吗？')
+                      confirm('确定重新获取并替换当前自动采集的 PDF 吗？')
                     )
                       acquireFulltext.mutate()
                   }}
@@ -921,9 +951,11 @@ export function LiteratureDetailPage() {
                   <Download size={16} />
                   {isFullTextRunning(latestFulltextTask)
                     ? '下载中'
-                    : literature.pdf_path
-                      ? '重新获取'
-                      : '从官网下载'}
+                    : latestFulltextTask?.status === 'waiting_user'
+                      ? '等待处理'
+                      : literature.pdf_path
+                        ? '重新获取'
+                        : '从官网下载'}
                 </Button>
               )}
               {literature.pdf_path && (
@@ -942,22 +974,35 @@ export function LiteratureDetailPage() {
         {latestFulltextTask && (
           <div className={`alert mt-4 ${latestFulltextTask.failed_count ? 'alert--warning' : ''}`}>
             <div className="actions justify-between">
-              <strong>
-                全文任务：
-                {isFullTextRunning(latestFulltextTask)
-                  ? '处理中'
-                  : latestFulltextTask.status === 'completed'
-                    ? '已完成'
-                    : latestFulltextTask.status === 'partial'
-                      ? '部分完成'
-                      : '失败'}
-              </strong>
+              <strong>全文任务：{fullTextStatusLabel(latestFulltextTask.status)}</strong>
               <Badge tone={statusTone(latestFulltextTask.status)}>
-                {latestFulltextTask.progress_message || latestFulltextTask.status}
+                {fullTextStatusLabel(latestFulltextTask.status)}
               </Badge>
             </div>
             {latestFulltextTask.items[0]?.error_message && (
               <p className="muted mt-2">{latestFulltextTask.items[0].error_message}</p>
+            )}
+            {waitingFulltextItem && (
+              <div className="actions justify-end mt-2">
+                {waitingFulltextItem.action_url && (
+                  <Button variant="ghost" asChild>
+                    <a href={waitingFulltextItem.action_url} target="_blank" rel="noreferrer">
+                      <ExternalLink size={15} />
+                      查看页面
+                    </a>
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  disabled={resumeFulltext.isPending}
+                  onClick={() => resumeFulltext.mutate()}
+                >
+                  <RefreshCw size={15} />
+                  {resumeFulltext.isPending
+                    ? '正在继续'
+                    : fullTextActionLabel(waitingFulltextItem.failure_code)}
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -966,7 +1011,7 @@ export function LiteratureDetailPage() {
             <Input
               type="file"
               accept="application/pdf,.pdf"
-              disabled={isFullTextRunning(latestFulltextTask)}
+              disabled={isFullTextActive(latestFulltextTask)}
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) uploadPdf.mutate(file)

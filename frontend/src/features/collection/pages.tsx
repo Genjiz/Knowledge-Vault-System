@@ -36,6 +36,12 @@ import {
   groupRawIssues,
   hasChineseTranslation,
 } from '@/lib/collection'
+import {
+  fullTextActionLabel,
+  fullTextStatusLabel,
+  isFullTextActive,
+  isFullTextRunning,
+} from '@/lib/fulltext'
 
 type SourceRow = SourceMeta & {
   enabled: boolean
@@ -63,32 +69,52 @@ function coveragePercent(collected: number, expected: number) {
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (['completed', 'ok'].includes(status || '')) return 'success'
   if (['failed', 'error'].includes(status || '')) return 'danger'
-  if (['running', 'pending', 'partial'].includes(status || '')) return 'warning'
+  if (['running', 'pending', 'waiting_user', 'partial'].includes(status || '')) return 'warning'
   return 'neutral'
 }
-function isFullTextRunning(task?: FullTextTask) {
-  return task?.status === 'pending' || task?.status === 'running'
-}
-function fullTextStatusLabel(status?: string) {
-  if (status === 'completed') return '已完成'
-  if (status === 'partial') return '部分完成'
-  if (status === 'failed') return '失败'
-  if (status === 'running') return '下载中'
-  return '等待开始'
-}
-function FullTextTaskSummary({ task }: { task?: FullTextTask }) {
+function FullTextTaskSummary({
+  task,
+  onResume,
+  resuming = false,
+}: {
+  task?: FullTextTask
+  onResume?: () => void
+  resuming?: boolean
+}) {
   if (!task) return null
   const failures = task.items.filter((item) => item.status === 'failed')
+  const waitingItem = task.items.find((item) => item.status === 'waiting_user')
   return (
-    <div className={`alert mt-4 ${task.failed_count ? 'alert--warning' : ''}`}>
+    <div className={`alert mt-4 ${task.failed_count || waitingItem ? 'alert--warning' : ''}`}>
       <div className="actions justify-between">
         <strong>全文任务：{fullTextStatusLabel(task.status)}</strong>
-        <Badge tone={statusTone(task.status)}>{task.progress_message || task.status}</Badge>
+        <Badge tone={statusTone(task.status)}>{fullTextStatusLabel(task.status)}</Badge>
       </div>
       <p className="muted mt-2">
         共 {task.total_count} 篇 · 成功 {task.succeeded_count} · 失败 {task.failed_count} · 跳过{' '}
         {task.skipped_count}
       </p>
+      {waitingItem && (
+        <div className="actions justify-between mt-2">
+          <p className="muted">{waitingItem.error_message || '任务等待用户处理'}</p>
+          <div className="actions">
+            {waitingItem.action_url && (
+              <Button variant="ghost" asChild>
+                <a href={waitingItem.action_url} target="_blank" rel="noreferrer">
+                  <ExternalLink size={15} />
+                  查看页面
+                </a>
+              </Button>
+            )}
+            {onResume && (
+              <Button variant="secondary" disabled={resuming} onClick={onResume}>
+                <RefreshCw size={15} />
+                {resuming ? '正在继续' : fullTextActionLabel(waitingItem.failure_code)}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {failures.slice(0, 5).map((item) => (
         <p className="muted mt-2" key={item.id}>
           {item.literature_title || `文献 #${item.literature_id || '-'}`}：
@@ -933,6 +959,15 @@ export function RawIssueDetailPage() {
     },
     onError: (error) => toast.error(error.message),
   })
+  const resumeFulltext = useMutation({
+    mutationFn: () => fulltextApi.resume(fulltextTasks.data?.[0]?.id || 0),
+    onSuccess: async (task) => {
+      client.setQueryData(['fulltext-tasks', 'issue', id], [task])
+      toast.success('全文任务已继续')
+      await client.invalidateQueries({ queryKey: ['fulltext-tasks', 'issue', id] })
+    },
+    onError: (error) => toast.error(error.message),
+  })
   if (issue.isLoading || fulltextTasks.isLoading || profiles.isLoading) return <LoadingState />
   if (issue.error || fulltextTasks.error || profiles.error || !issue.data)
     return <ErrorState error={issue.error || fulltextTasks.error || profiles.error} />
@@ -967,10 +1002,10 @@ export function RawIssueDetailPage() {
               </a>
             </Button>
           )}
-          {item.source_type === 'magtech' && (
+          {['magtech', 'scopus'].includes(item.source_type) && (
             <Button
               variant="secondary"
-              disabled={acquireFulltext.isPending || isFullTextRunning(latestFulltextTask)}
+              disabled={acquireFulltext.isPending || isFullTextActive(latestFulltextTask)}
               onClick={() => acquireFulltext.mutate()}
             >
               <Download size={16} />
@@ -1012,7 +1047,11 @@ export function RawIssueDetailPage() {
           </Button>
         </div>
       </div>
-      <FullTextTaskSummary task={latestFulltextTask} />
+      <FullTextTaskSummary
+        task={latestFulltextTask}
+        onResume={() => resumeFulltext.mutate()}
+        resuming={resumeFulltext.isPending}
+      />
       <Card>
         <PanelHeader
           title="论文详情"

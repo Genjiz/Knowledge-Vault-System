@@ -37,14 +37,23 @@ class FullTextApiTestCase(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
-    def _seed(self, source_type="magtech", pdf_path=None, pdf_source=None):
+    def _seed(
+        self,
+        source_type="magtech",
+        pdf_path=None,
+        pdf_source=None,
+        source_ref=None,
+        detail_url=None,
+    ):
         from app.collection.models import LiteratureSource, RawIssue, RawPaper
         from app.papers.models import Literature
 
         issue = RawIssue(
             source_type=source_type,
-            region="domestic",
-            journal_name="情报学报",
+            region="foreign" if source_type == "scopus" else "domestic",
+            journal_name=(
+                "Information Processing & Management" if source_type == "scopus" else "情报学报"
+            ),
             year=2026,
             issue="7",
             paper_count=1,
@@ -53,9 +62,10 @@ class FullTextApiTestCase(unittest.TestCase):
         db.session.flush()
         raw = RawPaper(
             raw_issue_id=issue.id,
-            source_ref_json=json.dumps({"article_id": "1044"}),
+            source_ref_json=json.dumps(source_ref or {"article_id": "1044"}),
             title="测试论文",
             authors="作者",
+            detail_url=detail_url,
         )
         literature = Literature(
             title="测试论文",
@@ -118,13 +128,59 @@ class FullTextApiTestCase(unittest.TestCase):
         self.assertEqual(first.get_json()["data"]["id"], second.get_json()["data"]["id"])
         self.assertEqual(self.scheduled, [first.get_json()["data"]["id"]])
 
-    def test_non_magtech_issue_is_not_supported(self):
+    def test_issue_without_supported_fulltext_reference_is_rejected(self):
         issue, _ = self._seed(source_type="ncpssd")
 
         response = self.client.post(f"/api/raw-issues/{issue.id}/fulltext-tasks")
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Magtech", response.get_json()["message"])
+        self.assertIn("可用的全文来源", response.get_json()["message"])
+
+    def test_scopus_issue_creates_sciencedirect_fulltext_task(self):
+        issue, _ = self._seed(
+            source_type="scopus",
+            source_ref={"pii": "S0306457326003201"},
+            detail_url="https://www.sciencedirect.com/science/article/pii/S0306457326003201",
+        )
+
+        response = self.client.post(f"/api/raw-issues/{issue.id}/fulltext-tasks")
+
+        self.assertEqual(response.status_code, 200)
+        task = response.get_json()["data"]
+        self.assertEqual(task["source_type"], "sciencedirect")
+        self.assertEqual(task["items"][0]["source_type"], "sciencedirect")
+        self.assertEqual(self.scheduled, [task["id"]])
+
+    def test_waiting_task_can_be_resumed_and_scheduled(self):
+        from app.collection.models import FullTextTask, FullTextTaskItem
+
+        _, literature = self._seed()
+        task = FullTextTask(
+            mode="single",
+            source_type="sciencedirect",
+            status="waiting_user",
+            total_count=1,
+        )
+        db.session.add(task)
+        db.session.flush()
+        db.session.add(
+            FullTextTaskItem(
+                task_id=task.id,
+                literature_id=literature.id,
+                source_type="sciencedirect",
+                status="waiting_user",
+                failure_code="verification_required",
+                action_url="https://www.sciencedirect.com/science/article/pii/example",
+            )
+        )
+        db.session.commit()
+
+        response = self.client.post(f"/api/fulltext-tasks/{task.id}/resume")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        self.assertEqual(payload["status"], "pending")
+        self.assertEqual(self.scheduled, [task.id])
 
 
 if __name__ == "__main__":

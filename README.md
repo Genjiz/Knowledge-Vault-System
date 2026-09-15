@@ -7,7 +7,7 @@ Knowledge Vault 是一个正在持续演进的个人知识库项目。它最初�
 ## 当前能力
 
 - 文献管理：文献条目、标签、文件夹、笔记、统计、备份
-- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Scopus API / Elsevier）、按期或按年查询题录并按真实卷期入库、Magtech 官网全文 PDF 补采、翻译、JSON/Markdown 导出
+- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Scopus API / Elsevier）、按期或按年查询题录并按真实卷期入库、Magtech 与授权 ScienceDirect 全文 PDF 补采、人工验证后续跑、翻译、JSON/Markdown 导出
 - 论文分析：整期或从整个文献库检索自选论文创建异步综合分析，支持默认 Prompt 查看、自定义要求、可选 PDF 全文、运行历史与显式模型选择
 - 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型；论文分析、论文翻译和视频笔记在任务入口选择具体模型
 - 视频转笔记：输入 B 站链接，自动执行音频下载、Whisper 转写和模型笔记生成
@@ -90,6 +90,8 @@ GEMINI_PROXY_URL=http://127.0.0.1:7890
 也支持直接在 `.env` 中使用 `HTTPS_PROXY` 或 `HTTP_PROXY`。
 
 国外期刊题录可使用 Scopus API。在「期刊与采集源」中填写期刊 ISSN 并启用 `Scopus API`，再到「Collection → 采集设置」保存 Elsevier Research Products API Key。密钥写入根目录 `.env` 的 `ELSEVIER_API_KEY`，不会进入数据库或 API 响应；Scopus 请求固定直连，不读取系统代理，COMPLETE 权益需要校园网或 aTrust 对应的出口 IP。
+
+Scopus 题录含 PII 时，文献详情或卷期详情可尝试从 ScienceDirect 获取全文。下载只使用当前机构网络和浏览器会话已有的合法权限；遇到人机校验时任务暂停并打开可见浏览器，由用户手动处理后继续。Cloudflare 出口拒绝会提示先切换校园网或 aTrust/VPN，不会自动绕过。
 
 ### 4. 启动与关闭
 

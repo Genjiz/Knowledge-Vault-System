@@ -75,6 +75,22 @@ class RuntimePathTestCase(unittest.TestCase):
 
         self.assertEqual(find_chrome_executable(), fake_chrome)
 
+    def test_find_chrome_executable_detects_microsoft_edge(self):
+        import app.collection.runtime.paths as runtime_paths
+
+        edge_path = Path(
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        )
+        os.environ.pop("CRAWLER_BROWSER_PATH", None)
+
+        with patch.object(
+            runtime_paths.Path,
+            "exists",
+            autospec=True,
+            side_effect=lambda path: path == edge_path,
+        ):
+            self.assertEqual(runtime_paths.find_chrome_executable(), edge_path)
+
 
 if __name__ == "__main__":
     unittest.main()

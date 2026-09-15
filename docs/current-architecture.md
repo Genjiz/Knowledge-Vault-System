@@ -21,14 +21,14 @@
 | `app/core/` | 平台层：跨包公共设施 | extensions（db/cors/migrate）、paths（数据目录唯一权威）、ports（端口分配唯一实现）、response、errors、health、tasks、llm/（模型档案、密钥存储、Gemini/OpenAI 适配器与 API） |
 | `app/papers/` | 统一论文实体与文献工作台 | models（Literature/Tag/Folder/Note/Journal/JournalSourceConfig）、repositories、routes（/api/literatures /tags /folders /notes /backup）、services（统一文献业务） |
 | `app/analysis/` | 论文分析独立业务域 | models（PaperAnalysis/PaperAnalysisItem/LiteratureTextAsset）、routes（/api/paper-analyses）、services（选择展开、Prompt 组装、全文解析缓存、分批分析） |
-| `app/collection/` | 期刊采集管道 | models（CrawlTask/RawIssue/RawPaper/LiteratureSource/FullTextTask 等）、repositories、services（ingestion/translation/analysis/artifact/task/**source_runner**/**raw_issue**/**fulltext**）、routes（/api/crawl-tasks /raw-issues /fulltext-tasks /journals /collection）、sources（SourceAdapter 接口 + registry 注册表 + NcpssdSource/MagtechSource/ScopusSource/ElsevierSource）、providers（兼容旧期号流程的 LLM 适配）、pipeline（paper_merge 多来源关联与字段物化）、runtime（浏览器/legacy 路径）、legacy（历史脚本隔离区） |
+| `app/collection/` | 期刊采集管道 | models（CrawlTask/RawIssue/RawPaper/LiteratureSource/FullTextTask 等）、repositories、services（ingestion/translation/analysis/artifact/task/**source_runner**/**raw_issue**/**fulltext**）、routes（/api/crawl-tasks /raw-issues /fulltext-tasks /journals /collection）、sources（题录 SourceAdapter 注册表）、fulltext（Magtech/ScienceDirect 全文提供器解析与错误分类）、providers（兼容旧期号流程的 LLM 适配）、pipeline（paper_merge 多来源关联与字段物化）、runtime（浏览器/legacy 路径）、legacy（历史脚本隔离区） |
 | `app/video_notes/` | 视频转笔记（独立功能） | models / repositories / services / routes / runtime |
 
 依赖方向：`collection → papers → core`，`analysis → papers/core`，`video_notes → core`。
 
 蓝图前缀：`/api/literatures`、`/api/paper-analyses`、`/api/llm`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/fulltext-tasks`、`/api/journals`、`/api/collection`、`/api/video-note-tasks`、`/api/health`。
 
-数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `e2f7c9a4b610`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照。
+数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `f6b8c1d3e742`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照，以及增加全文任务人工处理状态。
 
 ## 数据模型
 
@@ -40,7 +40,7 @@
 - 模型平台：`llm_profile` 保存协议、Base URL、模型名、启用状态和测试结果。用户发起论文分析、论文翻译或视频笔记时必须提交具体模型档案；场景名称仅用于 Prompt 和调用类型分类，不绑定默认模型。API Key 不入库。
 - 论文分析：`paper_analysis` 保存异步任务、模型、Prompt 模板版本与快照、自定义要求、全文使用/失败数和 Markdown 结果；`paper_analysis_item` 保存每篇统一文献的题录输入快照及所用全文资产引用。
 - 全文文本资产：`literature_text_asset` 按 PDF SHA-256 + 解析管道版本唯一复用，记录实际解析器名称/版本、Markdown SHA-256、字符数、状态与失败尝试。
-- 全文任务：`fulltext_task` 记录 single / issue / after_ingestion 任务总览，`fulltext_task_item` 记录逐篇成功、失败、跳过状态及下载来源快照
+- 全文任务：`fulltext_task` 记录 single / issue / after_ingestion 任务总览；`fulltext_task_item` 记录逐篇来源、成功/失败/跳过/等待用户状态、稳定失败码、待处理公开 URL 及下载结果
 
 合并规则（T-4）：DOI 非空时优先按 DOI 匹配，否则按清洗后的标题 + 期刊 + 年份 + 期号匹配。统一文献字段按 `用户编辑 > magtech > scopus > ncpssd > elsevier/其他来源` 逐字段选择首个非空值，因此一条文献可以混合多个来源字段；人工编辑字段不会被采集覆盖。论文级卷期优先于所属 raw_issue 的卷期。删除或重采采集批次后自动从剩余来源重新物化；最后一个来源删除时保留文献及其当前字段，并把非人工字段来源标记为 `retained`。`source_raw_paper_id` 指向当前最高优先级关联，仅用于旧代码兼容。
 
@@ -70,8 +70,9 @@
 | GET | `/api/journals/<id>/issues?source_id=&year=` | 探测某年可用期号 |
 | DELETE | `/api/raw-issues/<id>` | 删除指定来源的采集期号、原始论文和派生产物；保留统一文献并按剩余来源回算 |
 | POST | `/api/raw-issues/<id>/refresh` | 按年份重新查询 Scopus，并只覆盖目标卷期；空结果保留原数据 |
-| POST | `/api/literatures/<id>/fulltext-tasks` | 单篇获取全文；`replace_existing=true` 只允许替换已有 Magtech PDF |
-| POST | `/api/raw-issues/<id>/fulltext-tasks` | 为一个 Magtech 期号批量补采缺失全文 |
+| POST | `/api/literatures/<id>/fulltext-tasks` | 按文献来源解析 Magtech 或 ScienceDirect 全文；`replace_existing=true` 只替换同一自动来源 PDF |
+| POST | `/api/raw-issues/<id>/fulltext-tasks` | 为 Magtech 或可解析 PII 的 Scopus 卷期批量补采缺失全文 |
+| POST | `/api/fulltext-tasks/<id>/resume` | 在完成验证或切换网络后继续 `waiting_user` 任务 |
 | GET | `/api/fulltext-tasks[/<id>]` | 查询全文任务总览和逐篇结果，可按文献或期号过滤 |
 
 系统不再内置或自动导入期刊清单；新数据库的期刊为空，由「期刊与采集源」页面维护。期刊区域是用户维护的显式字段，采集源按区域与期刊匹配，配置接口会拒绝区域不符的源。
@@ -92,7 +93,11 @@ Scopus 源按 `ISSN(<journal.issn>) AND PUBYEAR = <year>` 使用 COMPLETE 视图
 
 Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 配置接入）：年页 `showTenYearVolumnDetail.do?nian={year}` → 期页 `volumn_{id}.shtml` → 文章 id → `getTxtFile.do?fileType=BibTeX`（题录/关键词/DOI）与 `fileType=EndNote`（摘要），每篇 2 个请求，无需浏览器。论文外部页按文章 id 固定生成 `/CN/abstract/abstract{id}.shtml`，不采用 BibTeX 中可能落入软 404 的 `/CN/abstract/article_{id}.shtml`；迁移同时规范化已有原始论文和统一文献 URL。标题中的 `bold` / `italic` / `sup` / `sub` 仅在标签严格成对且正确嵌套时清除；未配对、错误嵌套或未知标签保留原文并记录 warning。全文使用稳定 article_id 请求 `downloadArticleFile.do?attachType=PDF&id=<article_id>`；响应需以 `%PDF-` 开头且不超过 100 MB，验证后通过同目录临时文件原子替换。已实测情报学报官网 PDF 接口返回有效 `%PDF-1.4` 文件。
 
-全文采集与题录合并相互独立：采集台可勾选题录完成后补采全文，但后台仍先同步完成题录，再创建异步全文任务；PDF 失败不回滚题录。批量任务跳过已有 PDF；用户上传 PDF 永不被自动覆盖；单篇重新获取只能替换当前 Magtech PDF。同一期号删除或重采时保留已下载 PDF，只把失效的 raw_paper 引用置空。
+全文采集与题录合并相互独立：采集台可勾选题录完成后补采 Magtech 全文，文献详情与期号详情还可按已有来源补采；PDF 失败不回滚题录。全文提供器与题录源分离：Magtech 原始记录按 article_id 下载，Scopus 原始记录存在 PII 时解析为 ScienceDirect。批量任务跳过已有 PDF；用户上传 PDF 永不被自动覆盖；单篇重新获取只替换同一自动来源 PDF。同一期号删除或重采时保留已下载 PDF，只把失效的 raw_paper 引用置空。
+
+ScienceDirect 提供器使用 PII 构造文章页与 PDF 候选地址，串行任务在每篇下载后继续；响应必须通过 `%PDF-` 文件头和 100 MB 上限校验。人机 challenge 会打开持久 profile 的可见 Chromium 页面，并把任务暂停为 `waiting_user`，用户手动处理后通过恢复接口继续；程序不求解验证码。Cloudflare `CPE00001`、429 等出口限制归类为 `access_blocked`，不打开验证码页面并立即暂停整批；订阅不足归类为 `access_denied`，按单篇失败处理。Cookie、IP、challenge 正文和 reference number 不入库。
+
+当前正式 IP&M `Vol.64 No.1` 已验证从页面发起 ScienceDirect 任务后只请求首篇并正确暂停为 `access_blocked`，没有落盘文件或写入文献 PDF。受控 Edge 已完成可见启动、机构登录、文章页打开、会话内存读取和重连验证，文章页可见 `View PDF`；但 PDF 资产域进入持续 Turnstile，同一动态链接的 HTTP 请求仍返回 `403 / CPE00001`。系统不规避该 challenge，需切换到可访问的校园网/aTrust 后再验证成功下载。
 
 「测试连接」是轻量探测，不采集论文、不落临时文件：`magtech` 请求年页解析期号并回报识别结果；`ncpssd` 校验期刊定位参数是否已缓存 + 站点探活；`elsevier` 校验期刊 slug 是否已配置 + 站点探活；`scopus` 使用 STANDARD 视图请求一条记录并校验 Key、ISSN 与连通性。仅测试结果状态会写入 `journal_source_config`。
 
@@ -118,7 +123,7 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 | `/video-notes`、`/video-notes/tasks`、`/video-notes/tasks/<id>` | 视频任务创建、列表、状态、日志与产物 |
 | `/settings/models` | 模型档案、模型密钥与连接测试 |
 
-期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。issue 粒度源显示期号输入，year 粒度源只显示年份。采集期号库按期刊 → 年份 → 卷号 → 期号展示，`unknown` / `unassigned` 分别显示为“卷号未知”/“未分期”；统一文献层不保存这些内部标记。Scopus 详情可重采目标卷期。外文期号翻译要求选择具体模型，翻译后可用“原文 / 中文译文”分段控件切换显示。采集服务密钥在独立采集设置页维护。
+期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。issue 粒度源显示期号输入，year 粒度源只显示年份。采集期号库按期刊 → 年份 → 卷号 → 期号展示，`unknown` / `unassigned` 分别显示为“卷号未知”/“未分期”；统一文献层不保存这些内部标记。Scopus 详情可重采目标卷期，也可对存在 PII 的论文补采 ScienceDirect 全文。全文任务暂停时，期号详情与文献详情显示失败原因、公开文章页和按失败类型命名的继续操作。外文期号翻译要求选择具体模型，翻译后可用“原文 / 中文译文”分段控件切换显示。采集服务密钥在独立采集设置页维护。
 
 ## 数据与产物
 
@@ -139,7 +144,7 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 - 运行时路径工具从代码位置向上查找同时包含 `backend/` 和 `frontend/` 的目录作为工作区根（`app/collection/runtime/paths.py`）
 - 浏览器 profile 目录：`.crawler-browser-profile/`（可用环境变量 `CRAWLER_BROWSER_DATA_ROOT` 覆盖）
 - 采集历史脚本位于 `backend/app/collection/legacy/`，由 source 适配器动态加载包装
-- 浏览器可执行文件探测仅覆盖 Chrome/Chromium 常见路径，可用环境变量 `CRAWLER_BROWSER_PATH` 覆盖
+- 浏览器可执行文件探测覆盖 Chrome、Chromium 和 Microsoft Edge 常见 x64/x86 路径，可用环境变量 `CRAWLER_BROWSER_PATH` 覆盖
 - 模型 API Key 映射位于根目录 `.env` 的 `LLM_API_KEYS_JSON`（不提交）；数据库只存非敏感模型配置。
 - Elsevier Research Products API Key 位于根目录 `.env` 的 `ELSEVIER_API_KEY`（不提交）；设置页和接口只显示是否已配置。
 
@@ -157,7 +162,7 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 - 期刊筛选后端能力已就位（`/api/literatures?journal_id=`），前端筛选 UI 未接
 - 采集任务为同步执行（请求内跑完）；如需异步化需改 API 契约并配合前端轮询（core/tasks 执行器已可用）
 - 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
-- 全文自动采集目前只支持已配置的国内 Magtech 期刊官网；NCPSSD、Scopus、Elsevier、其他国外来源及需登录/付费/验证码的页面不支持，也不绕过访问控制
+- 全文自动采集目前支持已配置的国内 Magtech 期刊官网，以及可由 Scopus PII 定位且当前机构会话有权访问的 ScienceDirect 论文；NCPSSD、其他出版社和无订阅权限的页面不支持，也不绕过访问控制
 - 全文任务由进程内 daemon 线程执行，应用重启不会自动恢复未完成任务
 - 论文分析任务同样由进程内 daemon 线程执行，应用重启不会自动恢复未完成任务，可从历史记录重新分析
 - Magtech 年页 `showTenYearVolumnDetail.do` 仅覆盖近十年，更早年份的期号探测未实现
@@ -169,6 +174,6 @@ Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 
 
 ## 测试组织
 
-`backend/tests/` 按包归位：`core/`、`papers/`、`analysis/`、`collection/`、`video_notes/`。外部服务调用使用 mock / fixture 离线覆盖；当前全量套件 242 个测试。
+`backend/tests/` 按包归位：`core/`、`papers/`、`analysis/`、`collection/`、`video_notes/`。外部服务调用使用 mock / fixture 离线覆盖；当前全量套件 255 个测试。
 
-前端使用 Vitest 做纯逻辑测试，当前 5 个文件共 17 项；Playwright 项目级 E2E 覆盖路由、论文分析互斥选择与 Prompt 配置、Scopus 年度采集/卷期重采、全文入口、显式模型选择和移动端溢出，共 14 项。
+前端使用 Vitest 做纯逻辑测试，当前 6 个文件共 19 项；Playwright 项目级 E2E 覆盖路由、论文分析互斥选择与 Prompt 配置、Scopus 年度采集/卷期重采、全文入口、显式模型选择和移动端溢出，共 14 项。

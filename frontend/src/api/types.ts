@@ -198,7 +198,9 @@ export interface FullTextTaskItem {
   raw_paper_id?: number | null
   source_type: string
   source_url?: string | null
+  action_url?: string | null
   status: string
+  failure_code?: string | null
   error_message?: string | null
   pdf_path?: string | null
   file_size_bytes?: number | null
