@@ -4,6 +4,7 @@ from flask import Blueprint, current_app, request
 
 from app.core import error_response, success_response
 from app.core.tasks import TaskExecutor
+from app.core.llm.service import require_enabled_profile
 from app.video_notes.runtime.bilibili import extract_bvid, resolve_video_title
 from app.video_notes.services.execution_service import ExecutionService
 from app.video_notes.services.task_service import TaskService
@@ -71,6 +72,11 @@ def create_video_note_task():
         return error_response("Missing required field: source_url")
 
     try:
+        profile = require_enabled_profile(data.get("profile_id"))
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    try:
         bvid = extract_bvid(source_url)
     except ValueError as exc:
         return error_response(str(exc), 400)
@@ -87,6 +93,8 @@ def create_video_note_task():
         device=(data.get("device") or "cuda").strip(),
         compute_type=(data.get("compute_type") or "int8_float16").strip(),
         use_vad=bool(data.get("use_vad", True)),
+        profile_id=profile.id,
+        model_name=profile.model_name,
     )
     _task_executor()(task.id)
     return success_response(task.to_dict())

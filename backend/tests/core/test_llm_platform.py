@@ -82,46 +82,33 @@ class LLMPlatformApiTestCase(unittest.TestCase):
         self.assertEqual(updated["model_name"], "qwen-new")
         self.assertEqual(self.secrets.get(profile["id"]), "top-secret")
 
-    def test_scene_binding_drives_generation_and_allows_override(self):
+    def test_generation_requires_explicit_profile(self):
+        from app.core.llm.errors import LLMError
         from app.core.llm.service import LLMService
 
-        first = self.client.post(
+        profile = self.client.post(
             "/api/llm/profiles",
             json={
-                "name": "First",
+                "name": "Explicit",
                 "protocol": "gemini",
                 "model_name": "gemini-test",
                 "api_key": "key-1",
             },
         ).get_json()["data"]
-        second = self.client.post(
-            "/api/llm/profiles",
-            json={
-                "name": "Second",
-                "protocol": "openai",
-                "base_url": "https://example.invalid/v1",
-                "model_name": "openai-test",
-                "api_key": "key-2",
-            },
-        ).get_json()["data"]
-
-        bound = self.client.put(
-            "/api/llm/scenes/paper_analysis", json={"profile_id": first["id"]}
-        )
-        self.assertEqual(bound.status_code, 200)
 
         service = LLMService()
-        default_result = service.generate_text("paper_analysis", "hello")
-        override_result = service.generate_text(
-            "paper_analysis", "hello", profile_id=second["id"]
+        with self.assertRaises(LLMError):
+            service.generate_text("paper_analysis", "hello")
+        result = service.generate_text(
+            "paper_analysis", "hello", profile_id=profile["id"]
         )
 
-        self.assertEqual(default_result.text, "gemini-test:hello")
-        self.assertEqual(default_result.profile_id, first["id"])
-        self.assertEqual(override_result.text, "openai-test:hello")
+        self.assertEqual(result.text, "gemini-test:hello")
+        self.assertEqual(result.profile_id, profile["id"])
+        self.assertEqual(self.client.get("/api/llm/scenes").status_code, 404)
 
     def test_persisted_gemini_profile_falls_back_to_legacy_key(self):
-        from app.core.llm.models import LLMProfile, LLMSceneBinding
+        from app.core.llm.models import LLMProfile
         from app.core.llm.service import LLMService
 
         profile = LLMProfile(
@@ -131,12 +118,12 @@ class LLMPlatformApiTestCase(unittest.TestCase):
             enabled=True,
         )
         db.session.add(profile)
-        db.session.flush()
-        db.session.add(LLMSceneBinding(scene="paper_analysis", profile_id=profile.id))
         db.session.commit()
 
         with patch("app.core.llm.service.load_gemini_api_key", return_value="legacy-key"):
-            result = LLMService().generate_text("paper_analysis", "hello")
+            result = LLMService().generate_text(
+                "paper_analysis", "hello", profile_id=profile.id
+            )
 
         self.assertEqual(result.text, "gemini-legacy:hello")
 

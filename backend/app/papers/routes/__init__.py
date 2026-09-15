@@ -9,7 +9,7 @@ from app.papers.routes.note import note_bp
 from app.papers.routes.backup import backup_bp
 from app.video_notes.routes import video_note_task_bp
 from app.core.llm.routes import llm_bp
-from app.papers.routes.analysis import paper_analysis_bp
+from app.analysis.routes import paper_analysis_bp
 
 
 def register_routes(app: Flask):

@@ -31,8 +31,20 @@ class LiteratureJournalFilterTestCase(unittest.TestCase):
 
         self.journal_a = Journal(name="情报学报").save()
         self.journal_b = Journal(name="JASIST").save()
-        Literature(title="论文A", authors="张三", journal_id=self.journal_a.id).save()
-        Literature(title="论文B", authors="李四", journal_id=self.journal_b.id).save()
+        Literature(
+            title="论文A",
+            authors="张三",
+            journal="情报学报",
+            journal_id=self.journal_a.id,
+            abstract="知识组织研究",
+            keywords="知识图谱",
+        ).save()
+        Literature(
+            title="论文B",
+            authors="李四",
+            journal="JASIST",
+            journal_id=self.journal_b.id,
+        ).save()
         Literature(title="论文C", authors="王五").save()
 
     def tearDown(self):
@@ -56,6 +68,23 @@ class LiteratureJournalFilterTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["data"]["total"], 3)
+
+    def test_keyword_search_covers_all_bibliographic_fields(self):
+        cases = {
+            "张三": ["论文A"],
+            "JASIST": ["论文B"],
+            "知识组织": ["论文A"],
+            "知识图谱": ["论文A"],
+        }
+
+        for keyword, expected_titles in cases.items():
+            with self.subTest(keyword=keyword):
+                response = self.client.get("/api/literatures", query_string={"q": keyword})
+                self.assertEqual(response.status_code, 200)
+                payload = response.get_json()["data"]
+                self.assertEqual(
+                    [item["title"] for item in payload["items"]], expected_titles
+                )
 
     def test_create_and_update_track_explicit_user_fields(self):
         response = self.client.post(

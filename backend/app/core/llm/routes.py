@@ -6,9 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from app.core import error_response, success_response
 from app.core.extensions import db
 from app.core.llm.errors import LLMError
-from app.core.llm.models import LLMProfile, LLMSceneBinding
+from app.core.llm.models import LLMProfile
 from app.core.llm.secrets import EnvSecretStore
-from app.core.llm.service import LLMService, SCENES
+from app.core.llm.service import LLMService
 
 llm_bp = Blueprint("llm", __name__, url_prefix="/api/llm")
 PROTOCOLS = {"gemini", "openai"}
@@ -137,38 +137,3 @@ def test_profile(profile_id):
     profile.last_checked_at = datetime.now(UTC)
     db.session.commit()
     return success_response(_payload(profile))
-
-
-@llm_bp.route("/scenes", methods=["GET"])
-def list_scenes():
-    bindings = {row.scene: row for row in LLMSceneBinding.query.all()}
-    return success_response(
-        [
-            {
-                "scene": scene,
-                "label": label,
-                "profile_id": bindings[scene].profile_id if scene in bindings else None,
-                "profile_name": bindings[scene].profile.name if scene in bindings else None,
-                "model_name": bindings[scene].profile.model_name if scene in bindings else None,
-            }
-            for scene, label in SCENES.items()
-        ]
-    )
-
-
-@llm_bp.route("/scenes/<scene>", methods=["PUT"])
-def bind_scene(scene):
-    if scene not in SCENES:
-        return error_response("未知的模型场景")
-    profile_id = (request.get_json() or {}).get("profile_id")
-    profile = db.session.get(LLMProfile, profile_id) if profile_id else None
-    if profile is None:
-        return error_response("模型档案不存在", 404)
-    binding = LLMSceneBinding.query.filter_by(scene=scene).first()
-    if binding is None:
-        binding = LLMSceneBinding(scene=scene, profile_id=profile.id)
-        db.session.add(binding)
-    else:
-        binding.profile_id = profile.id
-    db.session.commit()
-    return success_response(binding.to_dict())

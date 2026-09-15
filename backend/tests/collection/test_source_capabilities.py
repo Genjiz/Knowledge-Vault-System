@@ -12,12 +12,15 @@ if str(BACKEND_DIR) not in sys.path:
 class SourceCapabilityDeclarationTestCase(unittest.TestCase):
     """每个源必须声明身份与能力，注册表与前端据此工作。"""
 
-    def _assert_source_contract(self, cls, source_id, region, needs_browser, list_issues):
+    def _assert_source_contract(
+        self, cls, source_id, region, needs_browser, list_issues, ingest_scope="issue"
+    ):
         self.assertEqual(cls.source_id, source_id)
         self.assertEqual(cls.region, region)
         self.assertTrue(cls.display_name)
         self.assertEqual(cls.capabilities["needs_browser"], needs_browser)
         self.assertEqual(cls.capabilities["list_issues"], list_issues)
+        self.assertEqual(cls.ingest_scope, ingest_scope)
         self.assertIsInstance(cls.config_fields, list)
 
     def test_ncpssd_declares_capabilities(self):
@@ -41,10 +44,30 @@ class SourceCapabilityDeclarationTestCase(unittest.TestCase):
             MagtechSource, "magtech", "domestic", needs_browser=False, list_issues=True
         )
 
+    def test_scopus_declares_year_scope(self):
+        from app.collection.sources.scopus import ScopusSource
+
+        self._assert_source_contract(
+            ScopusSource,
+            "scopus",
+            "foreign",
+            needs_browser=False,
+            list_issues=False,
+            ingest_scope="year",
+        )
+        self.assertFalse(ScopusSource.capabilities["download_pdf"])
+
     def test_sources_package_exports_all_sources(self):
         import app.collection.sources as sources
 
-        for name in ("SourceAdapter", "ProviderError", "NcpssdSource", "ElsevierSource", "MagtechSource"):
+        for name in (
+            "SourceAdapter",
+            "ProviderError",
+            "NcpssdSource",
+            "ElsevierSource",
+            "MagtechSource",
+            "ScopusSource",
+        ):
             self.assertTrue(hasattr(sources, name), f"sources 包缺少导出：{name}")
 
 
@@ -63,6 +86,13 @@ class RawPaperDoiFieldTestCase(unittest.TestCase):
 
         paper = RawPaper(raw_issue_id=1, title="t", doi="10.0000/example")
         self.assertEqual(paper.to_dict()["doi"], "10.0000/example")
+
+    def test_raw_paper_has_paper_level_volume_and_issue(self):
+        from app.collection.models import RawPaper
+
+        paper = RawPaper(raw_issue_id=1, title="t", volume="72", issue="2PA")
+        self.assertEqual(paper.to_dict()["volume"], "72")
+        self.assertEqual(paper.to_dict()["issue"], "2PA")
 
 
 class LegacySourceTestConnectionTestCase(unittest.TestCase):

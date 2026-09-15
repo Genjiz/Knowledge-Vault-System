@@ -1,6 +1,6 @@
 """采集源注册表与采集身份统一测试（T-1 阶段 2，方案 A）。
 
-- source_id 是唯一采集身份（ncpssd / magtech / elsevier）
+- source_id 是唯一采集身份（ncpssd / magtech / elsevier / scopus）
 - region 承担区域语义（domestic / foreign），供语言推断与前端分组
 """
 import sys
@@ -19,11 +19,13 @@ class SourceRegistryTestCase(unittest.TestCase):
         sources = describe_sources()
         by_id = {item["source_id"]: item for item in sources}
 
-        self.assertEqual(set(by_id), {"ncpssd", "magtech", "elsevier"})
+        self.assertEqual(set(by_id), {"ncpssd", "magtech", "elsevier", "scopus"})
         self.assertEqual(by_id["magtech"]["display_name"], "期刊官网（Magtech）")
         self.assertEqual(by_id["ncpssd"]["region"], "domestic")
         self.assertEqual(by_id["elsevier"]["region"], "foreign")
         self.assertTrue(by_id["magtech"]["capabilities"]["list_issues"])
+        self.assertEqual(by_id["scopus"]["ingest_scope"], "year")
+        self.assertEqual(by_id["elsevier"]["ingest_scope"], "issue")
         self.assertEqual(
             [field["key"] for field in by_id["magtech"]["config_fields"]], ["base_url"]
         )
@@ -51,6 +53,12 @@ class SourceRegistryTestCase(unittest.TestCase):
 
         self.assertIsInstance(get_source("ncpssd"), NcpssdSource)
         self.assertIsInstance(get_source("elsevier", None), ElsevierSource)
+
+    def test_get_source_builds_scopus_without_journal_config(self):
+        from app.collection.sources.scopus import ScopusSource
+        from app.collection.sources.registry import get_source
+
+        self.assertIsInstance(get_source("scopus", None), ScopusSource)
 
     def test_get_source_unknown_id_raises_value_error(self):
         from app.collection.sources.registry import get_source
@@ -142,6 +150,7 @@ class PaperMergeLanguageTestCase(unittest.TestCase):
 
     def test_foreign_region_maps_to_english(self):
         self.assertEqual(self._make_raw_paper("foreign", "elsevier"), "en")
+        self.assertEqual(self._make_raw_paper("foreign", "scopus"), "en")
 
     def test_legacy_row_without_region_falls_back_to_source_id(self):
         self.assertEqual(self._make_raw_paper(None, "ncpssd"), "zh")

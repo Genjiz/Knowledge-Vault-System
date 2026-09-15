@@ -25,6 +25,17 @@ class CrawlerApiTestCase(unittest.TestCase):
         from app.collection.models import RawIssue, RawPaper  # noqa: F401
 
         db.create_all()
+        from app.core.llm.models import LLMProfile
+
+        profile = LLMProfile(
+            name="测试模型",
+            protocol="gemini",
+            model_name="gemini-test",
+            enabled=True,
+        )
+        db.session.add(profile)
+        db.session.commit()
+        self.profile_id = profile.id
         self.client = self.app.test_client()
 
     def tearDown(self):
@@ -163,6 +174,59 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("不支持全文", response.get_json()["message"])
 
+    def test_create_year_scope_task_does_not_require_issue(self):
+        task, raw_issue = self._seed_issue()
+        task.source_type = "scopus"
+        task.issue = "year"
+        raw_issue.source_type = "scopus"
+        raw_issue.issue = "year"
+        db.session.commit()
+        calls = []
+
+        class FakeIngestionService:
+            def run_ingestion(self, source_type, journal_name, year, issue):
+                calls.append((source_type, journal_name, year, issue))
+                return task, [raw_issue]
+
+        self.app.config["CRAWLER_INGESTION_SERVICE"] = FakeIngestionService()
+        response = self.client.post(
+            "/api/crawl-tasks",
+            json={
+                "source_type": "scopus",
+                "journal_name": "Information Processing & Management",
+                "year": 2025,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(calls[0][-1], "year")
+        payload = response.get_json()["data"]
+        self.assertEqual([item["id"] for item in payload["raw_issues"]], [raw_issue.id])
+        self.assertEqual(payload["raw_issue"]["id"], raw_issue.id)
+
+    def test_create_scopus_task_rejects_fulltext(self):
+        response = self.client.post(
+            "/api/crawl-tasks",
+            json={
+                "source_type": "scopus",
+                "journal_name": "IP&M",
+                "year": 2025,
+                "download_fulltext": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("不支持全文", response.get_json()["message"])
+
+    def test_create_issue_scope_task_still_requires_issue(self):
+        response = self.client.post(
+            "/api/crawl-tasks",
+            json={"source_type": "elsevier", "journal_name": "IP&M", "year": 2025},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("issue", response.get_json()["message"])
+
     def test_create_crawl_task_returns_error_response_when_provider_fails(self):
         from app.collection.sources.base import ProviderError
 
@@ -215,11 +279,38 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.assertEqual(papers.status_code, 200)
         self.assertEqual(len(papers.get_json()["data"]), 1)
 
+    def test_list_raw_issues_honors_pagination_parameters(self):
+        from app.collection.models import RawIssue
+
+        _, raw_issue = self._seed_issue()
+        db.session.add(
+            RawIssue(
+                source_type=raw_issue.source_type,
+                journal_name=raw_issue.journal_name,
+                year=raw_issue.year,
+                volume=raw_issue.volume,
+                issue="4",
+                region=raw_issue.region,
+                paper_count=0,
+            )
+        )
+        db.session.commit()
+
+        response = self.client.get("/api/raw-issues?page=2&per_page=1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        self.assertEqual(payload["page"], 2)
+        self.assertEqual(payload["per_page"], 1)
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(len(payload["items"]), 1)
+
     def test_translate_and_analyze_endpoints_use_services(self):
         _, raw_issue = self._seed_issue()
 
         class FakeTranslationService:
-            def translate_issue(self, raw_issue_id):
+            def translate_issue(self, raw_issue_id, profile_id):
+                self.profile_id = profile_id
                 from app.collection.models import RawIssue
 
                 issue = db.session.get(RawIssue, raw_issue_id)
@@ -228,7 +319,8 @@ class CrawlerApiTestCase(unittest.TestCase):
                 return issue
 
         class FakeAnalysisService:
-            def analyze_issue(self, raw_issue_id):
+            def analyze_issue(self, raw_issue_id, profile_id):
+                self.profile_id = profile_id
                 from app.collection.models import RawIssueAnalysis
 
                 analysis = RawIssueAnalysis(
@@ -244,11 +336,17 @@ class CrawlerApiTestCase(unittest.TestCase):
         self.app.config["CRAWLER_TRANSLATION_SERVICE"] = FakeTranslationService()
         self.app.config["CRAWLER_ANALYSIS_SERVICE"] = FakeAnalysisService()
 
-        translate = self.client.post(f"/api/raw-issues/{raw_issue.id}/translate")
+        translate = self.client.post(
+            f"/api/raw-issues/{raw_issue.id}/translate",
+            json={"profile_id": self.profile_id},
+        )
         self.assertEqual(translate.status_code, 200)
         self.assertEqual(translate.get_json()["data"]["translation_status"], "completed")
 
-        analyze = self.client.post(f"/api/raw-issues/{raw_issue.id}/analyze")
+        analyze = self.client.post(
+            f"/api/raw-issues/{raw_issue.id}/analyze",
+            json={"profile_id": self.profile_id},
+        )
         self.assertEqual(analyze.status_code, 200)
         self.assertEqual(analyze.get_json()["data"]["status"], "completed")
 
@@ -262,23 +360,39 @@ class CrawlerApiTestCase(unittest.TestCase):
         _, raw_issue = self._seed_issue()
 
         class FakeTranslationService:
-            def translate_issue(self, raw_issue_id):
+            def translate_issue(self, raw_issue_id, profile_id):
                 raise ProviderError("google-genai is not installed")
 
         class FakeAnalysisService:
-            def analyze_issue(self, raw_issue_id):
+            def analyze_issue(self, raw_issue_id, profile_id):
                 raise ProviderError("analysis request failed")
 
         self.app.config["CRAWLER_TRANSLATION_SERVICE"] = FakeTranslationService()
         self.app.config["CRAWLER_ANALYSIS_SERVICE"] = FakeAnalysisService()
 
-        translate = self.client.post(f"/api/raw-issues/{raw_issue.id}/translate")
+        translate = self.client.post(
+            f"/api/raw-issues/{raw_issue.id}/translate",
+            json={"profile_id": self.profile_id},
+        )
         self.assertEqual(translate.status_code, 502)
         self.assertIn("google-genai is not installed", translate.get_json()["message"])
 
-        analyze = self.client.post(f"/api/raw-issues/{raw_issue.id}/analyze")
+        analyze = self.client.post(
+            f"/api/raw-issues/{raw_issue.id}/analyze",
+            json={"profile_id": self.profile_id},
+        )
         self.assertEqual(analyze.status_code, 502)
         self.assertIn("analysis request failed", analyze.get_json()["message"])
+
+    def test_llm_issue_actions_require_explicit_profile(self):
+        _, raw_issue = self._seed_issue()
+
+        translate = self.client.post(f"/api/raw-issues/{raw_issue.id}/translate", json={})
+        analyze = self.client.post(f"/api/raw-issues/{raw_issue.id}/analyze", json={})
+
+        self.assertEqual(translate.status_code, 400)
+        self.assertEqual(analyze.status_code, 400)
+        self.assertIn("模型", translate.get_json()["message"])
 
     def test_delete_raw_issue_preserves_literature_and_removes_artifact(self):
         from app.collection.pipeline.paper_merge import PaperMergeService
@@ -305,6 +419,41 @@ class CrawlerApiTestCase(unittest.TestCase):
         response = self.client.delete("/api/raw-issues/99999")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_refresh_scopus_issue_runs_targeted_year_ingestion(self):
+        task, raw_issue = self._seed_issue()
+        task.source_type = "scopus"
+        raw_issue.source_type = "scopus"
+        raw_issue.volume = "63"
+        raw_issue.issue = "2PA"
+        db.session.commit()
+        calls = []
+
+        class FakeIngestionService:
+            def run_ingestion(self, source_type, journal_name, year, issue, **kwargs):
+                calls.append((source_type, journal_name, year, issue, kwargs))
+                return task, [raw_issue]
+
+        self.app.config["CRAWLER_INGESTION_SERVICE"] = FakeIngestionService()
+        response = self.client.post(f"/api/raw-issues/{raw_issue.id}/refresh")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            calls,
+            [("scopus", raw_issue.journal_name, raw_issue.year, "year", {
+                "target_volume": "63",
+                "target_issue": "2PA",
+            })],
+        )
+        self.assertEqual(response.get_json()["data"]["raw_issues"][0]["id"], raw_issue.id)
+
+    def test_refresh_issue_rejects_non_scopus_source(self):
+        _, raw_issue = self._seed_issue()
+
+        response = self.client.post(f"/api/raw-issues/{raw_issue.id}/refresh")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Scopus", response.get_json()["message"])
 
 
 if __name__ == "__main__":

@@ -14,9 +14,9 @@ class SourceRunner:
     与具体采集源的类结构解耦，便于测试与未来替换为异步执行器。
     """
 
-    def test_connection(self, source_id, config, journal_name=None):
+    def test_connection(self, source_id, config, journal_name=None, issn=None):
         source = get_source(source_id, config)
-        return source.test_connection(journal_name=journal_name)
+        return source.test_connection(journal_name=journal_name, issn=issn)
 
     def list_issues(self, source_id, config, year, journal_name=None):
         source = get_source(source_id, config)

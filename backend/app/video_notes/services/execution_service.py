@@ -93,6 +93,7 @@ class ExecutionService:
                 source_url=task.source_url,
                 bvid=task.bvid,
                 video_title=task.video_title,
+                profile_id=task.profile_id,
             )
             note_path = self.artifact_service.write_note(task.id, markdown)
             task = self.task_service.update_task(

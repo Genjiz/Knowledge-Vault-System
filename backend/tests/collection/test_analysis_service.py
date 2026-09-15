@@ -24,8 +24,18 @@ class AnalysisServiceTestCase(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         from app.collection.models import RawIssue, RawPaper  # noqa: F401
+        from app.core.llm.models import LLMProfile
 
         db.create_all()
+        profile = LLMProfile(
+            name="期号分析测试模型",
+            protocol="gemini",
+            model_name="fake-gemini",
+            enabled=True,
+        )
+        db.session.add(profile)
+        db.session.commit()
+        self.profile_id = profile.id
 
     def tearDown(self):
         db.session.remove()
@@ -75,13 +85,14 @@ class AnalysisServiceTestCase(unittest.TestCase):
         class FakeAnalysisProvider:
             model_name = "fake-gemini"
 
-            def generate_analysis(self, raw_issue, papers):
+            def generate_analysis(self, raw_issue, papers, profile_id):
                 self.last_issue = raw_issue
                 self.last_papers = papers
+                self.profile_id = profile_id
                 return "# Analysis\n\nGenerated summary"
 
         service = AnalysisService(provider=FakeAnalysisProvider())
-        analysis = service.analyze_issue(raw_issue.id)
+        analysis = service.analyze_issue(raw_issue.id, self.profile_id)
 
         self.assertEqual(analysis.status, "completed")
         self.assertEqual(analysis.model_name, "fake-gemini")

@@ -9,12 +9,13 @@ class RawIssue(BaseModel):
             "source_type",
             "journal_name",
             "year",
+            "volume",
             "issue",
             name="uq_raw_issue_identity",
         ),
     )
 
-    # source_type 存真实采集源 id（ncpssd/magtech/elsevier），参与期号唯一键；
+    # source_type 存真实采集源 id，卷号与期号共同参与批次唯一键；
     # region 是区域类别（domestic/foreign），供语言推断与前端分组
     source_type = db.Column(db.String(50), nullable=False)
     region = db.Column(db.String(20))
@@ -28,11 +29,16 @@ class RawIssue(BaseModel):
     expected_paper_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     paper_count = db.Column(db.Integer, nullable=False, default=0)
     translation_status = db.Column(db.String(32), nullable=False, default="pending")
+    translation_profile_id = db.Column(
+        db.Integer, db.ForeignKey("llm_profile.id", ondelete="SET NULL")
+    )
+    translation_model_name = db.Column(db.String(255))
     analysis_status = db.Column(db.String(32), nullable=False, default="pending")
     raw_json_path = db.Column(db.String(500))
     crawl_task_id = db.Column(db.Integer, db.ForeignKey("crawl_task.id"), index=True)
 
     crawl_task = db.relationship("CrawlTask", back_populates="raw_issues")
+    translation_profile = db.relationship("LLMProfile")
     papers = db.relationship(
         "RawPaper",
         back_populates="raw_issue",
@@ -85,6 +91,11 @@ class RawIssue(BaseModel):
                 "abstract_collected_count": abstract_collected_count,
                 "fulltext_collected_count": fulltext_collected_count,
                 "translation_status": self.translation_status,
+                "translation_profile_id": self.translation_profile_id,
+                "translation_profile_name": (
+                    self.translation_profile.name if self.translation_profile else None
+                ),
+                "translation_model_name": self.translation_model_name,
                 "analysis_status": self.analysis_status,
                 "raw_json_path": self.raw_json_path,
                 "crawl_task_id": self.crawl_task_id,

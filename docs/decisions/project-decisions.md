@@ -172,7 +172,7 @@
 
 ## D-022 模型档案、场景绑定与密钥分离
 
-- 状态：已生效
+- 状态：已被 D-026 修订
 - 日期：2026-09-07
 - 内容：`core/llm` 提供 Gemini Native 与 OpenAI Compatible 统一调用；模型档案记录协议、Base URL、模型名和连接状态，论文分析、论文翻译、视频笔记分别绑定默认档案。非敏感配置存 SQLite，API Key 只存根目录 `.env`，接口只返回是否已配置；旧 Gemini Key 来源保留兼容回退。
 - 理由：模型供应商会持续变化，业务服务不应依赖某一 SDK；数据库随仓库提交，不能承载真实密钥。
@@ -182,6 +182,30 @@
 
 - 状态：已生效
 - 日期：2026-09-07
-- 内容：论文分析从采集期号详情中独立为 `/paper-analysis`；单期、多期和多篇选择最终都展开为去重后的 `literature_id` 集合，手工导入与采集论文共用流程。创建任务时保存题录输入快照，大输入在论文边界分批分析后再次综合，任务异步执行并保留历史结果。
-- 理由：`raw_issue` 表示某一采集源快照，同一期多来源会造成论文重复；分析属于统一论文工作台，不应依赖论文的获取方式。快照保证论文后续编辑或删除不改变历史分析依据。
-- 影响：新增 `paper_analysis` / `paper_analysis_item`、`/api/paper-analyses` 和独立导航入口；期号库只提供跳转快捷入口，旧详情页不再直接生成分析。
+- 内容：论文分析使用独立 `app/analysis` 域和 `/paper-analysis` 导航组；“整期分析”自动展开卷期全部统一文献，“自选论文”只使用显式勾选，两种模式互斥。创建任务保存题录、Prompt 模板版本/内容和自定义要求快照，超长全文也可分块分析后综合。
+- 理由：分析结果、输入快照、全文资产引用及未来会话能力有独立生命周期，不应从属于 papers 工作台或某一采集来源；互斥入口消除整期选择后是否还需逐篇勾选的歧义。
+- 影响：`paper_analysis` / `paper_analysis_item` 模型、服务和路由迁入 `app/analysis`，保持表名与 `/api/paper-analyses` 兼容；默认 Prompt 在页面可见，自定义要求追加而不替换默认要求。
+
+## D-024 国外期刊题录以 Scopus Search API 按年采集
+
+- 状态：已生效
+- 日期：2026-09-10
+- 内容：新增 `source_id=scopus` 作为国外期刊题录主源，按期刊 ISSN + 出版年使用 Scopus COMPLETE 视图查询；一次年度任务按论文真实 volume + issue 保存多个 raw_issue，同一期号跨卷保持独立，缺卷/缺期分别使用 `unknown` / `unassigned`。定向重采查询整年后精确过滤目标卷期，空结果不得覆盖原批次。Elsevier Research Products API Key 写入根目录 `.env`，接口不回传明文；Scopus HTTP 固定直连，不读取系统代理。
+- 理由：ScienceDirect 浏览器期页抓取依赖期刊 slug、卷期映射和浏览器状态，难以稳定覆盖一年多卷及特殊期号；Scopus Search API 可按 ISSN + 年返回结构化完整题录，并提供 DOI、PII、EID 作为稳定身份。
+- 影响：源合同增加 `ingest_scope`；`raw_issue` 唯一身份加入 volume；采集任务响应支持多个 raw_issue；前端按期刊 → 年份 → 卷号 → 期号展示并提供 Scopus 卷期重采；启用 Scopus 必须先填写期刊 ISSN，并配置有效 Key 与符合权益要求的出口 IP。
+
+## D-025 PDF 全文解析为可复用的版本化文本资产
+
+- 状态：已生效
+- 日期：2026-09-10
+- 内容：论文分析可选使用已有 PDF 全文。Markdown 资产以 PDF SHA-256 + 解析管道版本作为缓存身份，记录实际解析器名称/版本和 Markdown SHA-256；优先使用 PyMuPDF4LLM，失败回退 Docling。分析项引用资产 ID，模型调用时读取 Markdown 内容；解析失败记录到分析结果并继续题录分析。
+- 理由：按论文 ID 缓存无法识别 PDF 内容替换，也无法区分解析规则升级；每次分析重复解析浪费时间，而把 Markdown 复制进每次分析记录会造成大量重复数据。
+- 影响：新增 `literature_text_asset` 与 `paper_analysis_item.text_asset_id`；文本资产落在 `backend/data/artifacts/literature-text/`，超长单篇全文按字符预算分块后再综合。
+
+## D-026 用户发起的大模型任务显式选择模型
+
+- 状态：已生效
+- 日期：2026-09-10
+- 内容：移除场景默认模型绑定。论文分析、论文翻译、视频笔记及保留的期号分析接口都必须接收具体 `profile_id`，任务保存模型档案引用与模型名称快照；`paper_analysis`、`paper_translation`、`video_note` 等场景名只用于 Prompt 和调用类型分类。采集服务密钥迁入 Collection 下的独立采集设置页面。
+- 理由：当前大模型任务均由用户主动发起，隐藏的场景默认值会让用户无法判断实际模型；在操作位置选择具体模型更直接，也能保证历史任务可追溯。采集服务凭据与模型访问密钥属于不同业务域，不应混在同一设置页面。
+- 影响：删除 `llm_scene_binding`、场景绑定 API 和前端配置区；翻译期号与视频任务增加模型快照字段；`/settings/models` 仅管理模型档案，`/crawler/settings` 管理采集服务密钥。

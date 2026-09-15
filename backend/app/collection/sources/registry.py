@@ -6,11 +6,13 @@ API 据此校验与向前端描述源能力。新增采集源时在这里登记�
 from app.collection.sources.elsevier import ElsevierSource
 from app.collection.sources.magtech import MagtechSource
 from app.collection.sources.ncpssd import NcpssdSource
+from app.collection.sources.scopus import ScopusSource
 
 SOURCE_CLASSES = {
     "ncpssd": NcpssdSource,
     "magtech": MagtechSource,
     "elsevier": ElsevierSource,
+    "scopus": ScopusSource,
 }
 
 
@@ -53,6 +55,7 @@ def describe_source(source_id):
         "source_id": cls.source_id,
         "display_name": cls.display_name,
         "region": cls.region,
+        "ingest_scope": getattr(cls, "ingest_scope", "issue"),
         "capabilities": dict(cls.capabilities),
         "config_fields": [dict(field) for field in cls.config_fields],
     }

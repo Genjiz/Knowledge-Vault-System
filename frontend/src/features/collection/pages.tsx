@@ -13,7 +13,7 @@ import {
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { FullTextTask, Journal, ProbeIssue, RawIssue, SourceMeta } from '@/api/types'
-import { crawlApi, fulltextApi, journalApi } from '@/api/resources'
+import { crawlApi, fulltextApi, journalApi, llmApi } from '@/api/resources'
 import {
   Badge,
   Button,
@@ -29,6 +29,13 @@ import {
   Select,
 } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import {
+  collectionPeriodLabel,
+  collectionScopeNoun,
+  collectionVolumeLabel,
+  groupRawIssues,
+  hasChineseTranslation,
+} from '@/lib/collection'
 
 type SourceRow = SourceMeta & {
   enabled: boolean
@@ -155,6 +162,10 @@ export function JournalSourcesPage() {
           ),
       )
       if (missing) throw new Error(`${missing.display_name} 存在未填写的必填配置`)
+      const missingIssn = draft.rows.find(
+        (row) => row.enabled && row.ingest_scope === 'year' && !draft.issn.trim(),
+      )
+      if (missingIssn) throw new Error(`${missingIssn.display_name} 需要先填写期刊 ISSN`)
       const payload = {
         name: draft.name.trim(),
         issn: draft.issn || null,
@@ -379,7 +390,11 @@ export function JournalSourcesPage() {
                 <div>
                   <strong>{row.display_name}</strong>
                   <p className="muted">
-                    {row.capabilities.list_issues ? '支持列期号' : '手工填写期号'}
+                    {row.ingest_scope === 'year'
+                      ? '按年采集'
+                      : row.capabilities.list_issues
+                        ? '支持列期号'
+                        : '手工填写期号'}
                     {row.capabilities.needs_browser ? ' · 需要浏览器' : ''}
                   </p>
                 </div>
@@ -478,10 +493,11 @@ export function CrawlTaskPage() {
     [issue, setIssue] = useState(''),
     [downloadFulltext, setDownloadFulltext] = useState(false),
     [probed, setProbed] = useState<ProbeIssue[]>([]),
-    [last, setLast] = useState<RawIssue | null>(null)
+    [last, setLast] = useState<RawIssue[]>([])
   const journal = (journals.data || []).find((item) => item.name === journalName),
     available = (journal?.sources || []).filter((source) => source.enabled),
     sourceMeta = sources.data?.find((source) => source.source_id === sourceId),
+    isYearScope = sourceMeta?.ingest_scope === 'year',
     canDownloadFulltext = Boolean(sourceMeta?.capabilities.download_pdf)
   const chooseJournal = (name: string) => {
     setJournalName(name)
@@ -507,13 +523,15 @@ export function CrawlTaskPage() {
         source_type: sourceId,
         journal_name: journalName,
         year,
-        issue,
-        download_fulltext: downloadFulltext,
+        ...(isYearScope ? {} : { issue }),
+        download_fulltext: isYearScope ? false : downloadFulltext,
       }),
     onSuccess: async (result) => {
-      setLast(result.raw_issue)
+      setLast(result.raw_issues || (result.raw_issue ? [result.raw_issue] : []))
       toast.success(
-        result.fulltext_task ? '题录采集完成，全文任务已开始' : '采集任务完成并已写入原始数据库',
+        result.fulltext_task
+          ? '题录采集完成，全文任务已开始'
+          : `采集任务完成，已写入 ${result.raw_issues?.length || 1} 个卷期`,
       )
       if (result.fulltext_error) toast.warning(`全文任务未启动：${result.fulltext_error}`)
       await Promise.all([
@@ -537,7 +555,7 @@ export function CrawlTaskPage() {
       <PageHero
         eyebrow="Collection Desk · Launch"
         title="采集任务台"
-        description="选择期刊、已启用采集源、年份和期号，发起同步采集。"
+        description="选择期刊、采集源和采集范围，发起同步采集。"
         metrics={[
           { label: 'Tasks', value: taskList.length },
           { label: 'Issues', value: issues.data?.total || 0 },
@@ -562,6 +580,7 @@ export function CrawlTaskPage() {
                 disabled={!journalName}
                 onChange={(e) => {
                   setSourceId(e.target.value)
+                  setIssue('')
                   setDownloadFulltext(false)
                   setProbed([])
                 }}
@@ -576,7 +595,7 @@ export function CrawlTaskPage() {
                 ))}
               </Select>
             </Field>
-            <Field className="span-4" label="年份">
+            <Field className={isYearScope ? 'span-12' : 'span-4'} label="年份">
               <Input
                 type="number"
                 min="1990"
@@ -588,21 +607,28 @@ export function CrawlTaskPage() {
                 }}
               />
             </Field>
-            <Field className="span-4" label="期号">
-              <Input value={issue} onChange={(e) => setIssue(e.target.value)} />
-            </Field>
-            <div className="span-4 flex items-end">
-              <Button
-                variant="secondary"
-                disabled={
-                  !journal || !sourceId || !sourceMeta?.capabilities.list_issues || probe.isPending
-                }
-                onClick={() => probe.mutate()}
-              >
-                探测期号
-              </Button>
-            </div>
-            {canDownloadFulltext && (
+            {!isYearScope && (
+              <>
+                <Field className="span-4" label="期号">
+                  <Input value={issue} onChange={(e) => setIssue(e.target.value)} />
+                </Field>
+                <div className="span-4 flex items-end">
+                  <Button
+                    variant="secondary"
+                    disabled={
+                      !journal ||
+                      !sourceId ||
+                      !sourceMeta?.capabilities.list_issues ||
+                      probe.isPending
+                    }
+                    onClick={() => probe.mutate()}
+                  >
+                    探测期号
+                  </Button>
+                </div>
+              </>
+            )}
+            {!isYearScope && canDownloadFulltext && (
               <Field className="span-12" label="采集内容">
                 <label className="switch-label">
                   <input
@@ -635,17 +661,21 @@ export function CrawlTaskPage() {
           )}
           <Button
             className="mt-5 w-full"
-            disabled={!journalName || !sourceId || !issue || create.isPending}
+            disabled={!journalName || !sourceId || (!isYearScope && !issue) || create.isPending}
             onClick={() => create.mutate()}
           >
             {create.isPending ? '采集中...' : '发起采集'}
           </Button>
-          {last && (
+          {last.length > 0 && (
             <div className="alert mt-4">
-              最近完成：{last.journal_name} {last.year} 年第 {last.issue} 期{' '}
-              <Link to="/crawler/issues/$id" params={{ id: String(last.id) }}>
-                查看结果
-              </Link>
+              最近完成：{last[0]!.journal_name}，共 {last.length} 个卷期。{' '}
+              {last.length === 1 ? (
+                <Link to="/crawler/issues/$id" params={{ id: String(last[0]!.id) }}>
+                  查看结果
+                </Link>
+              ) : (
+                <Link to="/crawler/issues">前往期号库</Link>
+              )}
             </div>
           )}
         </Card>
@@ -659,7 +689,7 @@ export function CrawlTaskPage() {
                   <p className="muted">
                     {sources.data?.find((meta) => meta.source_id === task.source_type)
                       ?.display_name || task.source_type}{' '}
-                    · {task.year} / 第 {task.issue} 期
+                    · {collectionPeriodLabel(task.year, task.issue)}
                   </p>
                   {task.error_message && <p className="text-danger">{task.error_message}</p>}
                 </div>
@@ -674,41 +704,17 @@ export function CrawlTaskPage() {
   )
 }
 
-interface IssueGroup {
-  id: string
-  title: string
-  issues: RawIssue[]
-}
-function issueNumber(value: string) {
-  const matched = value.match(/\d+/)
-  return matched ? Number(matched[0]) : -1
-}
 export function RawIssueListPage() {
   const query = useQuery({ queryKey: ['raw-issues'], queryFn: crawlApi.issues }),
     [region, setRegion] = useState('all'),
     [selected, setSelected] = useState('')
   const filtered = useMemo(
     () =>
-      [...(query.data?.items || [])]
-        .filter((item) => region === 'all' || item.region === region)
-        .sort(
-          (a, b) =>
-            a.journal_name.localeCompare(b.journal_name, 'zh-CN') ||
-            b.year - a.year ||
-            issueNumber(b.issue) - issueNumber(a.issue),
-        ),
+      [...(query.data?.items || [])].filter((item) => region === 'all' || item.region === region),
     [query.data, region],
   )
-  const groups = useMemo<IssueGroup[]>(() => {
-    const map = new Map<string, RawIssue[]>()
-    filtered.forEach((item) => {
-      const key = item.journal_name
-      map.set(key, [...(map.get(key) || []), item])
-    })
-    return [...map].map(([title, items]) => ({ id: title, title, issues: items }))
-  }, [filtered])
-  const selectedIssues =
-    groups.find((group) => group.id === selected)?.issues || groups[0]?.issues || []
+  const groups = useMemo(() => groupRawIssues(filtered), [filtered])
+  const selectedGroup = groups.find((group) => group.journal === selected) || groups[0]
   if (query.isLoading) return <LoadingState />
   if (query.error) return <ErrorState error={query.error} />
   return (
@@ -757,91 +763,107 @@ export function RawIssueListPage() {
               <button
                 type="button"
                 className={
-                  (selected || groups[0]?.id) === group.id ? 'archive-node active' : 'archive-node'
+                  (selected || groups[0]?.journal) === group.journal
+                    ? 'archive-node active'
+                    : 'archive-node'
                 }
-                key={group.id}
-                onClick={() => setSelected(group.id)}
+                key={group.journal}
+                onClick={() => setSelected(group.journal)}
               >
-                <span>{group.title}</span>
-                <Badge>{group.issues.length}</Badge>
+                <span>{group.journal}</span>
+                <Badge>{group.issueCount}</Badge>
               </button>
             ))}
           </aside>
           <section>
-            {selectedIssues.length ? (
-              <div className="cards-grid cards-grid--2">
-                {selectedIssues.map((item) => {
-                  const expected = item.expected_paper_count ?? item.paper_count ?? 0
-                  const coverage = [
-                    {
-                      key: 'title',
-                      label: '标题',
-                      value: item.title_collected_count ?? 0,
-                    },
-                    {
-                      key: 'abstract',
-                      label: '摘要',
-                      value: item.abstract_collected_count ?? 0,
-                    },
-                    {
-                      key: 'fulltext',
-                      label: '全文',
-                      value: item.fulltext_collected_count ?? 0,
-                    },
-                  ]
-                  return (
-                    <article className="item-card issue-card" key={item.id}>
-                      <div className="actions justify-between issue-card__heading">
-                        <strong>
-                          {item.year} 年第 {item.issue} 期
-                        </strong>
-                        <Badge>{regionLabel(item.region)}</Badge>
+            {selectedGroup ? (
+              <div className="issue-hierarchy">
+                {selectedGroup.years.map((yearGroup) => (
+                  <section className="issue-year-group" key={yearGroup.year}>
+                    <h3>{yearGroup.year} 年</h3>
+                    {yearGroup.volumes.map((volumeGroup) => (
+                      <div className="issue-volume-group" key={volumeGroup.volume}>
+                        <h4>{collectionVolumeLabel(volumeGroup.volume)}</h4>
+                        <div className="cards-grid cards-grid--2">
+                          {volumeGroup.issues.map((item) => {
+                            const expected = item.expected_paper_count ?? item.paper_count ?? 0
+                            const coverage = [
+                              {
+                                key: 'title',
+                                label: '标题',
+                                value: item.title_collected_count ?? 0,
+                              },
+                              {
+                                key: 'abstract',
+                                label: '摘要',
+                                value: item.abstract_collected_count ?? 0,
+                              },
+                              {
+                                key: 'fulltext',
+                                label: '全文',
+                                value: item.fulltext_collected_count ?? 0,
+                              },
+                            ]
+                            return (
+                              <article className="item-card issue-card" key={item.id}>
+                                <div className="actions justify-between issue-card__heading">
+                                  <strong>
+                                    {item.issue === 'unassigned' ? '未分期' : `第 ${item.issue} 期`}
+                                  </strong>
+                                  <Badge>{regionLabel(item.region)}</Badge>
+                                </div>
+                                <div className="issue-card__meta">
+                                  <span>{item.source_type}</span>
+                                  <i aria-hidden="true" />
+                                  <span>
+                                    应有 <strong>{expected}</strong> 篇
+                                  </span>
+                                </div>
+                                <div className="issue-coverage" aria-label="采集进度">
+                                  {coverage.map((metric) => (
+                                    <div
+                                      className={`issue-coverage__item issue-coverage__item--${metric.key}`}
+                                      aria-label={`${metric.label}已采集 ${metric.value} 篇，应有 ${expected} 篇`}
+                                      key={metric.key}
+                                    >
+                                      <strong>
+                                        {metric.value}/{expected}
+                                      </strong>
+                                      <span>{metric.label}</span>
+                                      <div className="issue-coverage__track" aria-hidden="true">
+                                        <i
+                                          className="issue-coverage__fill"
+                                          style={{
+                                            width: `${coveragePercent(metric.value, expected)}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="actions issue-card__actions">
+                                  <Button variant="secondary" asChild>
+                                    <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
+                                      查看详情
+                                    </Link>
+                                  </Button>
+                                  <Button variant="secondary" asChild>
+                                    <a
+                                      href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&volume=${encodeURIComponent(item.volume || 'unknown')}&issue=${encodeURIComponent(item.issue)}`}
+                                    >
+                                      <BrainCircuit size={16} />
+                                      分析{collectionScopeNoun(item.issue)}
+                                    </a>
+                                  </Button>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
                       </div>
-                      <div className="issue-card__meta">
-                        <span>{item.source_type}</span>
-                        <i aria-hidden="true" />
-                        <span>
-                          应有 <strong>{expected}</strong> 篇
-                        </span>
-                      </div>
-                      <div className="issue-coverage" aria-label="采集进度">
-                        {coverage.map((metric) => (
-                          <div
-                            className={`issue-coverage__item issue-coverage__item--${metric.key}`}
-                            aria-label={`${metric.label}已采集 ${metric.value} 篇，应有 ${expected} 篇`}
-                            key={metric.key}
-                          >
-                            <strong>
-                              {metric.value}/{expected}
-                            </strong>
-                            <span>{metric.label}</span>
-                            <div className="issue-coverage__track" aria-hidden="true">
-                              <i
-                                className="issue-coverage__fill"
-                                style={{ width: `${coveragePercent(metric.value, expected)}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="actions issue-card__actions">
-                        <Button variant="secondary" asChild>
-                          <Link to="/crawler/issues/$id" params={{ id: String(item.id) }}>
-                            查看详情
-                          </Link>
-                        </Button>
-                        <Button variant="secondary" asChild>
-                          <a
-                            href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
-                          >
-                            <BrainCircuit size={16} />
-                            分析本期
-                          </a>
-                        </Button>
-                      </div>
-                    </article>
-                  )
-                })}
+                    ))}
+                  </section>
+                ))}
               </div>
             ) : (
               <EmptyState>暂无可展示期号</EmptyState>
@@ -867,18 +889,28 @@ export function RawIssueDetailPage() {
       queryFn: () => fulltextApi.list({ raw_issue_id: id, limit: 1 }),
       enabled: Boolean(id),
       refetchInterval: (query) => (isFullTextRunning(query.state.data?.[0]) ? 2000 : false),
-    })
+    }),
+    profiles = useQuery({ queryKey: ['llm-profiles'], queryFn: llmApi.profiles })
   const [lang, setLang] = useState<'zh' | 'en'>('en')
+  const [translationProfileId, setTranslationProfileId] = useState('')
   const refresh = async () =>
     Promise.all([
       client.invalidateQueries({ queryKey: ['raw-issue', id] }),
       client.invalidateQueries({ queryKey: ['raw-issues'] }),
     ])
   const translate = useMutation({
-    mutationFn: () => crawlApi.translate(id),
+    mutationFn: () => crawlApi.translate(id, Number(translationProfileId)),
     onSuccess: async () => {
       toast.success('翻译完成')
       setLang('zh')
+      await refresh()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const refreshMetadata = useMutation({
+    mutationFn: () => crawlApi.refreshIssue(id),
+    onSuccess: async () => {
+      toast.success('本期题录已重新采集')
       await refresh()
     },
     onError: (error) => toast.error(error.message),
@@ -901,19 +933,20 @@ export function RawIssueDetailPage() {
     },
     onError: (error) => toast.error(error.message),
   })
-  if (issue.isLoading || fulltextTasks.isLoading) return <LoadingState />
-  if (issue.error || fulltextTasks.error || !issue.data)
-    return <ErrorState error={issue.error || fulltextTasks.error} />
+  if (issue.isLoading || fulltextTasks.isLoading || profiles.isLoading) return <LoadingState />
+  if (issue.error || fulltextTasks.error || profiles.error || !issue.data)
+    return <ErrorState error={issue.error || fulltextTasks.error || profiles.error} />
   const item = issue.data,
     isDomestic = item.region === 'domestic',
     displayLang = isDomestic ? 'zh' : lang,
-    latestFulltextTask = fulltextTasks.data?.[0]
+    latestFulltextTask = fulltextTasks.data?.[0],
+    hasTranslation = hasChineseTranslation(item.papers)
   return (
     <div className="page-shell">
       <PageHero
         eyebrow="Issue Workspace · Detail"
         title={item.journal_name}
-        description={`${item.year} 年 · 第 ${item.issue} 期${item.volume ? ` · Vol.${item.volume}` : ''}`}
+        description={`${collectionPeriodLabel(item.year, item.issue)}${item.volume ? ` · Vol.${item.volume}` : ''}`}
         metrics={[
           { label: 'Source', value: item.source_type },
           { label: 'Expected', value: item.expected_paper_count || 0 },
@@ -944,12 +977,22 @@ export function RawIssueDetailPage() {
               {isFullTextRunning(latestFulltextTask) ? '全文下载中' : '补采本期全文'}
             </Button>
           )}
+          {item.source_type === 'scopus' && (
+            <Button
+              variant="secondary"
+              disabled={refreshMetadata.isPending}
+              onClick={() => refreshMetadata.mutate()}
+            >
+              <RefreshCw size={16} />
+              {refreshMetadata.isPending ? '重采中' : '重采本期题录'}
+            </Button>
+          )}
           <Button variant="secondary" asChild>
             <a
-              href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&issue=${encodeURIComponent(item.issue)}`}
+              href={`/paper-analysis?journal=${encodeURIComponent(item.journal_name)}&year=${item.year}&volume=${encodeURIComponent(item.volume || 'unknown')}&issue=${encodeURIComponent(item.issue)}`}
             >
               <BrainCircuit size={16} />
-              分析本期
+              分析{collectionScopeNoun(item.issue)}
             </a>
           </Button>
           <Button
@@ -958,7 +1001,7 @@ export function RawIssueDetailPage() {
             onClick={() => {
               if (
                 confirm(
-                  `确定删除《${item.journal_name}》${item.year} 年第 ${item.issue} 期的 ${item.source_type} 采集记录吗？文献列表会保留，并按剩余来源重新计算。`,
+                  `确定删除《${item.journal_name}》${collectionPeriodLabel(item.year, item.issue)}的 ${item.source_type} 采集记录吗？文献列表会保留，并按剩余来源重新计算。`,
                 )
               )
                 remove.mutate()
@@ -977,16 +1020,51 @@ export function RawIssueDetailPage() {
             <div className="actions">
               {!isDomestic && (
                 <>
-                  <Button disabled={translate.isPending} onClick={() => translate.mutate()}>
-                    {translate.isPending ? '翻译中...' : '翻译本期'}
-                  </Button>
                   <Select
-                    value={lang}
-                    onChange={(e) => setLang(e.target.value === 'zh' ? 'zh' : 'en')}
+                    aria-label="翻译模型"
+                    value={translationProfileId}
+                    onChange={(event) => setTranslationProfileId(event.target.value)}
                   >
-                    <option value="zh">中文</option>
-                    <option value="en">English</option>
+                    <option value="" disabled>
+                      请选择翻译模型
+                    </option>
+                    {(profiles.data || [])
+                      .filter((profile) => profile.enabled)
+                      .map((profile) => (
+                        <option value={profile.id} key={profile.id}>
+                          {profile.name} · {profile.model_name}
+                        </option>
+                      ))}
                   </Select>
+                  <Button
+                    disabled={!translationProfileId || translate.isPending}
+                    onClick={() => translate.mutate()}
+                  >
+                    {translate.isPending
+                      ? '翻译中...'
+                      : `${hasTranslation ? '重新翻译' : '翻译'}${collectionScopeNoun(item.issue)}`}
+                  </Button>
+                  <div className="segmented-control" aria-label="论文显示语言">
+                    <button
+                      type="button"
+                      className={lang === 'en' ? 'active' : ''}
+                      onClick={() => setLang('en')}
+                    >
+                      原文
+                    </button>
+                    <button
+                      type="button"
+                      className={lang === 'zh' ? 'active' : ''}
+                      disabled={!hasTranslation}
+                      title={hasTranslation ? '中文译文' : '尚无中文译文'}
+                      onClick={() => setLang('zh')}
+                    >
+                      中文译文
+                    </button>
+                  </div>
+                  {item.translation_model_name && (
+                    <span className="muted">上次翻译：{item.translation_model_name}</span>
+                  )}
                 </>
               )}
               <span className="muted">共 {item.papers?.length || 0} 篇</span>

@@ -4,7 +4,7 @@ import { Clipboard, Download, Plus, Video } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { VideoTask } from '@/api/types'
-import { videoApi } from '@/api/resources'
+import { llmApi, videoApi } from '@/api/resources'
 import {
   Badge,
   Button,
@@ -61,13 +61,15 @@ export function VideoNoteHomePage() {
       queryKey: ['video-tasks'],
       queryFn: videoApi.list,
       refetchInterval: (query) => (query.state.data?.some(shouldPoll) ? 5000 : false),
-    })
+    }),
+    profiles = useQuery({ queryKey: ['llm-profiles'], queryFn: llmApi.profiles })
   const [url, setUrl] = useState(''),
     [model, setModel] = useState('large-v3-turbo'),
     [language, setLanguage] = useState('zh'),
     [device, setDevice] = useState('cuda'),
     [compute, setCompute] = useState('int8_float16'),
-    [vad, setVad] = useState(true)
+    [vad, setVad] = useState(true),
+    [profileId, setProfileId] = useState('')
   const create = useMutation({
     mutationFn: () =>
       videoApi.create({
@@ -77,6 +79,7 @@ export function VideoNoteHomePage() {
         device,
         compute_type: compute,
         use_vad: vad,
+        profile_id: Number(profileId),
       }),
     onSuccess: async (task) => {
       toast.success('任务已创建，正在后台处理')
@@ -85,8 +88,8 @@ export function VideoNoteHomePage() {
     },
     onError: (error) => toast.error(error.message),
   })
-  if (tasks.isLoading) return <LoadingState />
-  if (tasks.error) return <ErrorState error={tasks.error} />
+  if (tasks.isLoading || profiles.isLoading) return <LoadingState />
+  if (tasks.error || profiles.error) return <ErrorState error={tasks.error || profiles.error} />
   const recent = tasks.data || []
   return (
     <div className="page-shell">
@@ -118,6 +121,20 @@ export function VideoNoteHomePage() {
                 ))}
               </Select>
             </Field>
+            <Field className="span-6" label="笔记生成模型">
+              <Select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
+                <option value="" disabled>
+                  请选择模型
+                </option>
+                {(profiles.data || [])
+                  .filter((profile) => profile.enabled)
+                  .map((profile) => (
+                    <option value={profile.id} key={profile.id}>
+                      {profile.name} · {profile.model_name}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
             <Field className="span-6" label="语言">
               <Select value={language} onChange={(e) => setLanguage(e.target.value)}>
                 <option value="zh">中文</option>
@@ -147,7 +164,7 @@ export function VideoNoteHomePage() {
           </div>
           <Button
             className="mt-4 w-full"
-            disabled={!url.trim() || create.isPending}
+            disabled={!url.trim() || !profileId || create.isPending}
             onClick={() => create.mutate()}
           >
             <Plus size={16} />
@@ -163,7 +180,7 @@ export function VideoNoteHomePage() {
             </article>
             <article>
               <strong>模型与网络</strong>
-              <p>首次运行 faster-whisper 可能下载模型；Gemini 调用读取项目既有 Key 和代理配置。</p>
+              <p>首次运行 faster-whisper 可能下载模型；笔记生成使用任务中选择的大模型。</p>
             </article>
             <article>
               <strong>任务产物</strong>

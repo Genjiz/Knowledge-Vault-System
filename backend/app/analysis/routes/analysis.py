@@ -1,12 +1,17 @@
 from flask import Blueprint, current_app, request
-from sqlalchemy import func
+from sqlalchemy import case, func
 
+from app.analysis.models import PaperAnalysis
+from app.analysis.services.analysis_service import (
+    DEFAULT_PROMPT_TEMPLATE,
+    PROMPT_TEMPLATE_VERSION,
+    PaperAnalysisService,
+)
 from app.core import error_response, paginated_response, success_response
 from app.core.extensions import db
 from app.core.tasks import TaskExecutor
 from app.papers.models import Literature
-from app.papers.models.paper_analysis import PaperAnalysis
-from app.papers.services.analysis_service import PaperAnalysisService
+
 
 paper_analysis_bp = Blueprint("paper_analysis", __name__, url_prefix="/api/paper-analyses")
 _executor = TaskExecutor()
@@ -47,25 +52,51 @@ def list_analyses():
     )
 
 
+@paper_analysis_bp.route("/prompt-template", methods=["GET"])
+def get_prompt_template():
+    return success_response(
+        {"version": PROMPT_TEMPLATE_VERSION, "content": DEFAULT_PROMPT_TEMPLATE}
+    )
+
+
 @paper_analysis_bp.route("/issues", methods=["GET"])
 def list_issue_options():
+    issue_text = func.lower(func.trim(func.coalesce(Literature.issue, "")))
+    volume_text = func.lower(func.trim(func.coalesce(Literature.volume, "")))
+    normalized_issue = case(
+        (issue_text.in_(("", "year", "unassigned")), "unassigned"),
+        else_=Literature.issue,
+    )
+    normalized_volume = case(
+        (volume_text.in_(("", "unknown")), "unknown"),
+        else_=Literature.volume,
+    )
     rows = (
         db.session.query(
             func.max(Literature.journal_id),
             Literature.journal,
             Literature.year,
-            Literature.issue,
+            normalized_volume,
+            normalized_issue,
             func.count(Literature.id),
         )
         .filter(
             Literature.journal.isnot(None),
             Literature.journal != "",
             Literature.year.isnot(None),
-            Literature.issue.isnot(None),
-            Literature.issue != "",
         )
-        .group_by(Literature.journal, Literature.year, Literature.issue)
-        .order_by(Literature.journal, Literature.year.desc(), Literature.issue)
+        .group_by(
+            Literature.journal,
+            Literature.year,
+            normalized_volume,
+            normalized_issue,
+        )
+        .order_by(
+            Literature.journal,
+            Literature.year.desc(),
+            normalized_volume,
+            normalized_issue,
+        )
         .all()
     )
     return success_response(
@@ -74,10 +105,11 @@ def list_issue_options():
                 "journal_id": journal_id,
                 "journal": journal,
                 "year": year,
+                "volume": volume or "unknown",
                 "issue": issue,
                 "paper_count": count,
             }
-            for journal_id, journal, year, issue, count in rows
+            for journal_id, journal, year, volume, issue, count in rows
         ]
     )
 
@@ -98,6 +130,8 @@ def create_analysis():
             issues=data.get("issues") or [],
             title=data.get("title"),
             profile_id=data.get("profile_id"),
+            custom_instruction=data.get("custom_instruction"),
+            include_fulltext=bool(data.get("include_fulltext", False)),
         )
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
@@ -129,6 +163,7 @@ def rerun_analysis(analysis_id):
     try:
         analysis = _service().clone_analysis(analysis_id, data.get("profile_id"))
     except ValueError as exc:
-        return error_response(str(exc), 404)
+        status = 404 if str(exc) == "分析任务不存在" else 400
+        return error_response(str(exc), status)
     _submit(analysis.id)
     return success_response(analysis.to_dict(include_items=True), "重新分析任务已创建")

@@ -21,11 +21,14 @@ const groups = [
     items: [
       ['/', '仪表盘', Gauge],
       ['/literatures', '文献列表', FileText],
-      ['/paper-analysis', '论文分析', BrainCircuit],
       ['/tags', '标签管理', Tags],
       ['/folders', '文件夹管理', Folder],
       ['/statistics', '统计分析', BarChart3],
     ],
+  },
+  {
+    label: 'Analysis',
+    items: [['/paper-analysis', '论文分析', BrainCircuit]],
   },
   {
     label: 'Collection',
@@ -33,6 +36,7 @@ const groups = [
       ['/crawler/journals', '期刊与采集源', BookOpen],
       ['/crawler/tasks', '采集任务台', Workflow],
       ['/crawler/issues', '采集期号库', Archive],
+      ['/crawler/settings', '采集设置', Settings2],
     ],
   },
   {

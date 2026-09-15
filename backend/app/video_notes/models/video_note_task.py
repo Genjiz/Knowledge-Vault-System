@@ -19,6 +19,10 @@ class VideoNoteTask(BaseModel):
     device = db.Column(db.String(32), nullable=False, default="cuda")
     compute_type = db.Column(db.String(32), nullable=False, default="int8_float16")
     use_vad = db.Column(db.Boolean, nullable=False, default=True)
+    profile_id = db.Column(
+        db.Integer, db.ForeignKey("llm_profile.id", ondelete="SET NULL")
+    )
+    model_name = db.Column(db.String(255))
 
     audio_path = db.Column(db.Text)
     transcript_path = db.Column(db.Text)
@@ -34,6 +38,7 @@ class VideoNoteTask(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    profile = db.relationship("LLMProfile")
 
     def to_dict(self):
         data = super().to_dict()
@@ -52,6 +57,9 @@ class VideoNoteTask(BaseModel):
                 "device": self.device,
                 "compute_type": self.compute_type,
                 "use_vad": self.use_vad,
+                "profile_id": self.profile_id,
+                "profile_name": self.profile.name if self.profile else None,
+                "model_name": self.model_name,
                 "audio_path": self.audio_path,
                 "transcript_path": self.transcript_path,
                 "note_path": self.note_path,

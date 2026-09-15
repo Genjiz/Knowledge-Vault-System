@@ -51,6 +51,18 @@ const sampleIssue = {
   ],
 }
 
+const sampleScopusIssue = {
+  ...sampleIssue,
+  id: 2,
+  journal_name: 'Information Processing & Management',
+  source_type: 'scopus',
+  region: 'foreign',
+  year: 2026,
+  volume: '63',
+  issue: '1',
+  translation_model_name: 'gemini-test',
+}
+
 const sampleVideoTask = {
   id: 1,
   source_url: 'https://www.bilibili.com/video/BV1TEST',
@@ -123,6 +135,7 @@ async function installApiMocks(page: Page) {
   let literature = { ...sampleLiterature }
   let literatureFulltextTasks: ReturnType<typeof pendingFulltextTask>[] = []
   let issueFulltextTasks: ReturnType<typeof pendingFulltextTask>[] = []
+  let hasElsevierKey = false
   let modelProfiles: MockModelProfile[] = [
     {
       id: 1,
@@ -198,10 +211,25 @@ async function installApiMocks(page: Page) {
           source_id: 'magtech',
           display_name: 'Magtech',
           region: 'domestic',
+          ingest_scope: 'issue',
           capabilities: { list_issues: true, download_pdf: true, needs_browser: false },
           config_fields: [],
         },
+        {
+          source_id: 'scopus',
+          display_name: 'Scopus API',
+          region: 'foreign',
+          ingest_scope: 'year',
+          capabilities: { list_issues: false, download_pdf: false, needs_browser: false },
+          config_fields: [],
+        },
       ]
+    } else if (path === '/api/collection/elsevier-key' && method === 'GET') {
+      data = { has_api_key: hasElsevierKey }
+    } else if (path === '/api/collection/elsevier-key' && method === 'PUT') {
+      const payload = request.postDataJSON() as Record<string, unknown>
+      hasElsevierKey = payload.clear === true ? false : Boolean(payload.api_key)
+      data = { has_api_key: hasElsevierKey }
     } else if (path === '/api/journals') {
       data = [
         {
@@ -212,6 +240,15 @@ async function installApiMocks(page: Page) {
           region: 'domestic',
           sources: [{ source_id: 'magtech', enabled: true, is_default: true }],
           stats: { issue_count: 1, last_collected_at: '2026-09-05T08:00:00Z' },
+        },
+        {
+          id: 2,
+          name: 'IP&M',
+          issn: '0306-4573',
+          publisher: 'Elsevier',
+          region: 'foreign',
+          sources: [{ source_id: 'scopus', enabled: true, is_default: true }],
+          stats: { issue_count: 0, last_collected_at: null },
         },
       ]
     } else if (path === '/api/crawl-tasks' && method === 'POST') {
@@ -247,6 +284,23 @@ async function installApiMocks(page: Page) {
       const task = pendingFulltextTask(102, 'issue')
       issueFulltextTasks = [task]
       data = task
+    } else if (path === '/api/raw-issues/2/refresh' && method === 'POST') {
+      data = {
+        task: {
+          id: 3,
+          journal_name: sampleScopusIssue.journal_name,
+          source_type: 'scopus',
+          year: 2026,
+          issue: 'year',
+          status: 'completed',
+        },
+        raw_issue: sampleScopusIssue,
+        raw_issues: [sampleScopusIssue],
+      }
+    } else if (path === '/api/raw-issues/2/translate' && method === 'POST') {
+      data = sampleScopusIssue
+    } else if (path === '/api/raw-issues/2') {
+      data = sampleScopusIssue
     } else if (path === '/api/raw-issues/1') {
       data = sampleIssue
     } else if (path === '/api/llm/profiles' && method === 'GET') {
@@ -264,16 +318,22 @@ async function installApiMocks(page: Page) {
       }
       modelProfiles = [...modelProfiles, created]
       data = created
-    } else if (path === '/api/llm/scenes' && method === 'GET') {
-      data = [
-        { scene: 'paper_analysis', label: '论文分析', profile_id: 1, model_name: 'gemini-test' },
-        { scene: 'paper_translation', label: '论文翻译', profile_id: 1, model_name: 'gemini-test' },
-        { scene: 'video_note', label: '视频笔记', profile_id: 1, model_name: 'gemini-test' },
-      ]
     } else if (path === '/api/paper-analyses/issues') {
       data = [
-        { journal_id: 1, journal: 'Knowledge Systems', year: 2026, issue: '3', paper_count: 1 },
+        {
+          journal_id: 1,
+          journal: 'Knowledge Systems',
+          year: 2026,
+          volume: '45',
+          issue: '3',
+          paper_count: 1,
+        },
       ]
+    } else if (path === '/api/paper-analyses/prompt-template') {
+      data = {
+        version: 'paper-analysis-v1',
+        content: '默认分析要求：覆盖核心研究主题、研究方法与逐篇论文亮点。',
+      }
     } else if (path === '/api/paper-analyses/selection-preview') {
       data = [literature]
     } else if (path === '/api/paper-analyses' && method === 'POST') {
@@ -291,6 +351,8 @@ async function installApiMocks(page: Page) {
       data = { items: analyses, total: analyses.length, page: 1, per_page: 20 }
     } else if (/^\/api\/paper-analyses\/\d+$/.test(path)) {
       data = analyses.find((item) => item.id === Number(path.split('/').pop())) || null
+    } else if (path === '/api/video-note-tasks' && method === 'POST') {
+      data = { ...sampleVideoTask, profile_id: 1, model_name: 'gemini-test' }
     } else if (path === '/api/video-note-tasks') {
       data = [sampleVideoTask]
     } else if (path === '/api/video-note-tasks/1/logs') {
@@ -333,6 +395,7 @@ const routes = [
   ['/crawler/tasks', '采集任务台'],
   ['/crawler/issues', '采集期号库'],
   ['/crawler/issues/1', '情报学报'],
+  ['/crawler/settings', '采集设置'],
   ['/video-notes', '视频转笔记'],
   ['/video-notes/tasks', '视频任务列表'],
   ['/video-notes/tasks/1', '视频任务验证'],
@@ -425,6 +488,24 @@ test('题录采集可以选择完成后补采全文', async ({ page }) => {
   expect(payload.download_fulltext).toBe(true)
 })
 
+test('Scopus 年度采集不提交期号且不显示期号控件', async ({ page }) => {
+  await page.goto('/crawler/tasks')
+  await page.getByLabel('期刊').selectOption('IP&M')
+  await expect(page.getByLabel('采集源')).toHaveValue('scopus')
+  await expect(page.getByLabel('期号')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '探测期号' })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: '题录完成后补采全文' })).toHaveCount(0)
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/api/crawl-tasks' && request.method() === 'POST',
+  )
+  await page.getByRole('button', { name: '发起采集' }).click()
+  const payload = (await requestPromise).postDataJSON()
+  expect(payload.source_type).toBe('scopus')
+  expect(payload.issue).toBeUndefined()
+  expect(payload.download_fulltext).toBe(false)
+})
+
 test('模型配置可以新增 OpenAI Compatible 档案且不回显密钥', async ({ page }) => {
   await page.goto('/settings/models')
   await page.getByRole('button', { name: '新增模型' }).click()
@@ -432,7 +513,7 @@ test('模型配置可以新增 OpenAI Compatible 档案且不回显密钥', asyn
   await page.getByLabel('协议').selectOption('openai')
   await page.getByLabel('Base URL').fill('http://127.0.0.1:11434/v1')
   await page.getByLabel('模型名称').fill('qwen-test')
-  await page.getByLabel('API Key').fill('browser-test-secret')
+  await page.getByLabel('API Key', { exact: true }).fill('browser-test-secret')
   const requestPromise = page.waitForRequest(
     (request) =>
       new URL(request.url()).pathname === '/api/llm/profiles' && request.method() === 'POST',
@@ -449,10 +530,29 @@ test('模型配置可以新增 OpenAI Compatible 档案且不回显密钥', asyn
   await expect(page.getByText('browser-test-secret')).toHaveCount(0)
 })
 
-test('论文分析可以按期号选择并创建任务', async ({ page }) => {
+test('设置页可以保存 Elsevier 采集密钥且不回显', async ({ page }) => {
+  await page.goto('/crawler/settings')
+  await page.getByRole('textbox', { name: /^API Key/ }).fill('browser-elsevier-secret')
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/api/collection/elsevier-key' &&
+      request.method() === 'PUT',
+  )
+  await page.getByRole('button', { name: '保存密钥' }).click()
+  expect((await requestPromise).postDataJSON()).toEqual({ api_key: 'browser-elsevier-secret' })
+  await expect(page.getByText('browser-elsevier-secret')).toHaveCount(0)
+})
+
+test('论文分析明确区分整期和自选论文，并显示 Prompt 配置', async ({ page }) => {
   await page.goto('/paper-analysis')
+  await expect(
+    page.getByText('默认分析要求：覆盖核心研究主题、研究方法与逐篇论文亮点。'),
+  ).toBeVisible()
   await page.getByRole('checkbox', { name: /Knowledge Systems/ }).check()
   await expect(page.locator('.selection-count')).toHaveText('1')
+  await page.getByLabel('运行模型').selectOption('1')
+  await page.getByLabel('用户自定义分析要求').fill('重点比较研究方法。')
+  await page.getByLabel('分析时包含可用全文').check()
   const requestPromise = page.waitForRequest(
     (request) =>
       new URL(request.url()).pathname === '/api/paper-analyses' && request.method() === 'POST',
@@ -460,14 +560,57 @@ test('论文分析可以按期号选择并创建任务', async ({ page }) => {
   await page.getByRole('button', { name: '开始分析' }).click()
   const payload = (await requestPromise).postDataJSON()
   expect(payload.issues).toHaveLength(1)
-  expect(payload.profile_id).toBeUndefined()
+  expect(payload.profile_id).toBe(1)
+  expect(payload.custom_instruction).toBe('重点比较研究方法。')
+  expect(payload.include_fulltext).toBe(true)
+
+  await page.getByRole('button', { name: '自选论文' }).click()
+  await expect(page.locator('.analysis-issue-tree')).toHaveCount(0)
+  await expect(page.locator('.selection-count')).toHaveText('0')
+  await expect(page.locator('.selection-toolbar')).toBeVisible()
+  await expect(page.locator('.selection-scroll')).toBeVisible()
+  await expect(page.getByText('共 1 篇 · 第 1/1 页')).toBeVisible()
+})
+
+test('外文期号显式选择翻译模型并用分段控件切换译文', async ({ page }) => {
+  await page.goto('/crawler/issues/2')
+  await expect(page.getByRole('combobox', { name: '论文显示语言' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '原文' })).toHaveClass(/active/)
+  await page.getByRole('button', { name: '中文译文' }).click()
+  await expect(page.getByRole('button', { name: '中文译文' })).toHaveClass(/active/)
+
+  await page.getByLabel('翻译模型').selectOption('1')
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/api/raw-issues/2/translate' &&
+      request.method() === 'POST',
+  )
+  await page.getByRole('button', { name: '重新翻译本期' }).click()
+  expect((await requestPromise).postDataJSON()).toEqual({ profile_id: 1 })
+})
+
+test('视频笔记在创建任务时提交具体模型', async ({ page }) => {
+  await page.goto('/video-notes')
+  await page.getByLabel('B 站视频链接').fill('https://www.bilibili.com/video/BV1TEST')
+  await expect(page.getByRole('button', { name: '创建任务' })).toBeDisabled()
+  await page.getByLabel('笔记生成模型').selectOption('1')
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/api/video-note-tasks' && request.method() === 'POST',
+  )
+
+  await page.getByRole('button', { name: '创建任务' }).click()
+
+  expect((await requestPromise).postDataJSON()).toMatchObject({ profile_id: 1 })
 })
 
 test('期刊页不再暴露内置清单，期号详情提供独立分析入口', async ({ page }) => {
   await page.goto('/crawler/journals')
   await expect(page.getByRole('button', { name: '导入内置清单' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '配置' })).toHaveClass(/button--secondary/)
-  await expect(page.getByRole('button', { name: '去采集' })).toHaveClass(/button--secondary/)
+  await expect(page.getByRole('button', { name: '配置' }).first()).toHaveClass(/button--secondary/)
+  await expect(page.getByRole('button', { name: '去采集' }).first()).toHaveClass(
+    /button--secondary/,
+  )
   await expect(page.getByRole('button', { name: '删除 情报学报' })).toHaveClass(/button--danger/)
 
   await page.goto('/crawler/issues')
@@ -505,6 +648,20 @@ test('期刊页不再暴露内置清单，期号详情提供独立分析入口',
   )
   await expect(page.getByText('打开论文页面')).toHaveCount(0)
   await expect(page.getByRole('button', { name: '生成分析' })).toHaveCount(0)
+})
+
+test('Scopus 卷期详情可以定向重采本期题录', async ({ page }) => {
+  await page.goto('/crawler/issues/2')
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/api/raw-issues/2/refresh' &&
+      request.method() === 'POST',
+  )
+
+  await page.getByRole('button', { name: '重采本期题录' }).click()
+
+  await requestPromise
+  await expect(page.getByText('本期题录已重新采集')).toBeVisible()
 })
 
 test('移动端布局不产生页面级横向溢出', async ({ page }) => {

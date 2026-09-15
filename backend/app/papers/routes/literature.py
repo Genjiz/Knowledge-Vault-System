@@ -27,6 +27,7 @@ def get_literatures():
     authors = request.args.get('authors')
     abstract = request.args.get('abstract')
     journal_id = request.args.get('journal_id', type=int)
+    keyword = request.args.get('q')
     
     if has_pdf is not None:
         has_pdf = has_pdf.lower() == 'true'
@@ -44,7 +45,8 @@ def get_literatures():
         title=title,
         authors=authors,
         abstract=abstract,
-        journal_id=journal_id
+        journal_id=journal_id,
+        keyword=keyword,
     )
     
     items = [item.to_dict() for item in pagination.items]

@@ -2,7 +2,6 @@ import json
 import shutil
 import sys
 import tempfile
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -84,6 +83,31 @@ class CrawlerArtifactServiceTestCase(unittest.TestCase):
         self.assertEqual(raw_payload["journal_name"], raw_issue.journal_name)
         self.assertEqual(raw_payload["papers"][0]["title"], "Paper A")
         self.assertEqual(markdown_payload, "# Summary\n\nHello world")
+
+    def test_same_issue_number_in_different_volumes_uses_distinct_paths(self):
+        from app.collection.models import RawIssue
+        from app.collection.services.artifact_service import ArtifactService
+
+        rows = [
+            RawIssue(
+                source_type="scopus",
+                journal_name="IP&M",
+                year=2026,
+                volume=volume,
+                issue="1",
+                paper_count=0,
+            )
+            for volume in ("63", "64")
+        ]
+        db.session.add_all(rows)
+        db.session.commit()
+
+        paths = [ArtifactService().export_raw_issue(row) for row in rows]
+
+        self.assertNotEqual(paths[0], paths[1])
+        self.assertIn(str(Path("2026") / "63" / "1.json"), paths[0])
+        self.assertIn(str(Path("2026") / "64" / "1.json"), paths[1])
+        self.assertTrue(all(Path(path).is_file() for path in paths))
 
 
 if __name__ == "__main__":

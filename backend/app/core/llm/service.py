@@ -1,13 +1,11 @@
 from dataclasses import dataclass
-from types import SimpleNamespace
-
 from flask import current_app
 
 from app.core.extensions import db
 from app.core.llm.clients import create_adapter
 from app.core.llm.errors import LLMError
 from app.core.llm.gemini import load_gemini_api_key
-from app.core.llm.models import LLMProfile, LLMSceneBinding
+from app.core.llm.models import LLMProfile
 from app.core.llm.secrets import EnvSecretStore
 
 SCENES = {
@@ -16,18 +14,26 @@ SCENES = {
     "video_note": "视频笔记",
 }
 
-LEGACY_MODELS = {
-    "paper_analysis": "gemini-3-flash-preview",
-    "paper_translation": "gemini-3-flash-preview",
-    "video_note": "gemini-2.5-flash",
-}
-
-
 @dataclass(frozen=True)
 class GenerationResult:
     text: str
     profile_id: int | None
     model_name: str
+
+
+def require_enabled_profile(profile_id):
+    if profile_id in (None, ""):
+        raise ValueError("请选择要使用的模型")
+    try:
+        normalized_id = int(profile_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("模型档案 ID 无效") from exc
+    profile = db.session.get(LLMProfile, normalized_id)
+    if profile is None:
+        raise ValueError("模型档案不存在")
+    if not profile.enabled:
+        raise ValueError("所选模型档案已停用")
+    return profile
 
 
 class LLMService:
@@ -40,27 +46,14 @@ class LLMService:
     def _resolve_profile(self, scene, profile_id=None):
         if scene not in SCENES:
             raise LLMError(f"Unknown LLM scene: {scene}")
-        if profile_id is not None:
-            profile = db.session.get(LLMProfile, profile_id)
-        else:
-            binding = LLMSceneBinding.query.filter_by(scene=scene).first()
-            profile = binding.profile if binding else None
-        if profile is not None:
-            if not profile.enabled:
-                raise LLMError("Selected model profile is disabled")
-            api_key = self.secret_store.get(profile.id)
-            if not api_key and profile.protocol == "gemini":
-                api_key = load_gemini_api_key()
-            return profile, api_key
-
-        # 兼容升级前的 Gemini 配置；正式库迁移后通常会命中持久化档案。
-        profile = SimpleNamespace(
-            id=None,
-            protocol="gemini",
-            base_url=None,
-            model_name=LEGACY_MODELS[scene],
-        )
-        return profile, load_gemini_api_key()
+        try:
+            profile = require_enabled_profile(profile_id)
+        except ValueError as exc:
+            raise LLMError(str(exc)) from exc
+        api_key = self.secret_store.get(profile.id)
+        if not api_key and profile.protocol == "gemini":
+            api_key = load_gemini_api_key()
+        return profile, api_key
 
     def generate_text(self, scene, prompt, profile_id=None):
         profile, api_key = self._resolve_profile(scene, profile_id)

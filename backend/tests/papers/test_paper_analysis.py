@@ -50,7 +50,18 @@ class PaperAnalysisTestCase(unittest.TestCase):
         self.app.config["PAPER_ANALYSIS_ARTIFACT_ROOT"] = str(self.temp_dir)
         self.client = self.app.test_client()
 
+        from app.core.llm.models import LLMProfile
         from app.papers.models import Journal, Literature
+
+        profile = LLMProfile(
+            name="分析测试模型",
+            protocol="gemini",
+            model_name="gemini-analysis-test",
+            enabled=True,
+        )
+        db.session.add(profile)
+        db.session.flush()
+        self.profile_id = profile.id
 
         journal = Journal(name="情报学报", region="domestic")
         db.session.add(journal)
@@ -63,6 +74,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
                 journal="情报学报",
                 journal_id=journal.id,
                 year=2026,
+                volume="45",
                 issue="1",
                 abstract="摘要一",
                 keywords="关键词一",
@@ -73,6 +85,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
                 journal="情报学报",
                 journal_id=journal.id,
                 year=2026,
+                volume="45",
                 issue="1",
                 abstract="摘要二",
                 keywords="关键词二",
@@ -83,6 +96,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
                 journal="情报学报",
                 journal_id=journal.id,
                 year=2026,
+                volume="45",
                 issue="2",
                 abstract=None,
             ),
@@ -105,6 +119,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
         rows = response.get_json()["data"]
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["paper_count"], 2)
+        self.assertEqual(rows[0]["volume"], "45")
 
     def test_issue_options_exclude_blank_journal_or_issue(self):
         from app.papers.models import Literature
@@ -116,6 +131,30 @@ class PaperAnalysisTestCase(unittest.TestCase):
 
         self.assertEqual(len(rows), 2)
 
+    def test_issue_options_group_missing_issue_as_unassigned(self):
+        from app.papers.models import Literature
+
+        unassigned = Literature(
+            title="未分期论文",
+            authors="作者丁",
+            journal="情报学报",
+            journal_id=self.journal_id,
+            year=2026,
+            volume="45",
+            issue=None,
+        )
+        db.session.add(unassigned)
+        db.session.commit()
+
+        rows = self.client.get("/api/paper-analyses/issues").get_json()["data"]
+        option = next(row for row in rows if row["issue"] == "unassigned")
+        preview = self.client.post(
+            "/api/paper-analyses/selection-preview", json={"issues": [option]}
+        ).get_json()["data"]
+
+        self.assertEqual(option["paper_count"], 1)
+        self.assertEqual([paper["id"] for paper in preview], [unassigned.id])
+
     def test_issue_selection_includes_manual_paper_without_journal_id(self):
         from app.papers.models import Literature
 
@@ -125,6 +164,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
             journal="情报学报",
             journal_id=None,
             year=2026,
+            volume="45",
             issue="1",
             abstract="手工摘要",
         )
@@ -153,6 +193,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
                         "issue": "1",
                     }
                 ],
+                "profile_id": self.profile_id,
             },
         )
 
@@ -164,8 +205,19 @@ class PaperAnalysisTestCase(unittest.TestCase):
         self.assertEqual(len(self.executor.calls), 1)
 
     def test_create_rejects_empty_selection(self):
-        response = self.client.post("/api/paper-analyses", json={})
+        response = self.client.post(
+            "/api/paper-analyses", json={"profile_id": self.profile_id}
+        )
         self.assertEqual(response.status_code, 400)
+
+    def test_create_requires_explicit_profile(self):
+        response = self.client.post(
+            "/api/paper-analyses",
+            json={"literature_ids": [self.papers[0].id]},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("模型", response.get_json()["message"])
 
     def test_create_rejects_unknown_profile(self):
         response = self.client.post(
@@ -176,7 +228,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
         self.assertIn("模型档案不存在", response.get_json()["message"])
 
     def test_execute_batches_large_input_and_saves_result(self):
-        from app.papers.services.analysis_service import PaperAnalysisService
+        from app.analysis.services.analysis_service import PaperAnalysisService
 
         llm = FakeLLMService()
         service = PaperAnalysisService(llm_service=llm, max_batch_chars=30)
@@ -184,6 +236,7 @@ class PaperAnalysisTestCase(unittest.TestCase):
             literature_ids=[paper.id for paper in self.papers],
             issues=[],
             title="Batch test",
+            profile_id=self.profile_id,
         )
 
         completed = service.execute(analysis.id)
@@ -196,11 +249,14 @@ class PaperAnalysisTestCase(unittest.TestCase):
         self.assertTrue(Path(completed.artifact_md_path).exists())
 
     def test_list_and_get_return_history_with_snapshots(self):
-        from app.papers.services.analysis_service import PaperAnalysisService
+        from app.analysis.services.analysis_service import PaperAnalysisService
 
         service = PaperAnalysisService(llm_service=FakeLLMService())
         analysis = service.create_analysis(
-            literature_ids=[self.papers[0].id], issues=[], title="Saved"
+            literature_ids=[self.papers[0].id],
+            issues=[],
+            title="Saved",
+            profile_id=self.profile_id,
         )
 
         listed = self.client.get("/api/paper-analyses").get_json()["data"]

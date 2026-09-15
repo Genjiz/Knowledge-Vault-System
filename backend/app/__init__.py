@@ -28,8 +28,9 @@ def create_app(config_name=None):
     app.config['UPLOAD_FOLDER'] = upload_folder
     
     from app.papers.models import Journal, JournalSourceConfig
-    from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note, PaperAnalysis, PaperAnalysisItem
-    from app.core.llm.models import LLMProfile, LLMSceneBinding
+    from app.papers.models import Literature, Tag, LiteratureTag, Folder, LiteratureFolder, Note
+    from app.analysis.models import LiteratureTextAsset, PaperAnalysis, PaperAnalysisItem
+    from app.core.llm.models import LLMProfile
     from app.collection.models import CrawlTask, CrawlTaskLog, FullTextTask, FullTextTaskItem, LiteratureSource, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
     from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
     

@@ -24,8 +24,10 @@ class FakeRunner:
         self.error = error
         self.calls = []
 
-    def test_connection(self, source_id, config, journal_name=None):
-        self.calls.append(("test_connection", source_id, dict(config or {}), journal_name))
+    def test_connection(self, source_id, config, journal_name=None, issn=None):
+        self.calls.append(
+            ("test_connection", source_id, dict(config or {}), journal_name, issn)
+        )
         if self.error:
             raise self.error
         return dict(self.check_result)
@@ -67,8 +69,9 @@ class SourceCatalogApiTestCase(JournalSourcesApiTestCase):
 
         self.assertEqual(response.status_code, 200)
         sources = {item["source_id"]: item for item in self._unwrap(response)}
-        self.assertEqual(set(sources), {"ncpssd", "magtech", "elsevier"})
+        self.assertEqual(set(sources), {"ncpssd", "magtech", "elsevier", "scopus"})
         self.assertTrue(sources["magtech"]["capabilities"]["list_issues"])
+        self.assertEqual(sources["scopus"]["ingest_scope"], "year")
         self.assertEqual(
             sources["magtech"]["config_fields"][0]["key"], "base_url"
         )
@@ -201,6 +204,17 @@ class JournalSourceConfigApiTestCase(JournalSourcesApiTestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_enabled_scopus_requires_journal_issn(self):
+        journal_id = self._create_journal(name="IP&M", region="foreign")
+
+        response = self.client.put(
+            f"/api/journals/{journal_id}/sources",
+            json={"sources": [{"source_id": "scopus", "enabled": True}]},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("ISSN", response.get_json()["message"])
+
     def test_replace_sources_rejects_region_mismatch(self):
         """国内期刊不允许启用国外源（如 elsevier），反之亦然。"""
         journal_id = self._create_journal()
@@ -256,6 +270,20 @@ class SourceTestApiTestCase(JournalSourcesApiTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._unwrap(response)["last_check_status"], "failed")
         self.assertIn("站点不可达", self._unwrap(response)["last_check_message"])
+
+    def test_scopus_connection_receives_journal_issn(self):
+        journal_id = self._create_journal(
+            name="IP&M", region="foreign", issn="0306-4573"
+        )
+        self.client.put(
+            f"/api/journals/{journal_id}/sources",
+            json={"sources": [{"source_id": "scopus", "enabled": True}]},
+        )
+
+        response = self.client.post(f"/api/journals/{journal_id}/sources/scopus/test")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.runner.calls[-1][-1], "0306-4573")
 
 
 class IssueProbeApiTestCase(JournalSourcesApiTestCase):

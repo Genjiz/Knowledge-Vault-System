@@ -3,6 +3,7 @@ import type { ComponentType } from 'react'
 import { AppShell } from './AppShell'
 import {
   BackupPage,
+  CollectionSettingsPage,
   CrawlTaskPage,
   DashboardPage,
   FolderPage,
@@ -41,6 +42,7 @@ const routes = [
   route('/crawler/tasks', CrawlTaskPage),
   route('/crawler/issues', RawIssueListPage),
   route('/crawler/issues/$id', RawIssueDetailPage),
+  route('/crawler/settings', CollectionSettingsPage),
   route('/video-notes', VideoNoteHomePage),
   route('/video-notes/tasks', VideoNoteListPage),
   route('/video-notes/tasks/$id', VideoNoteDetailPage),

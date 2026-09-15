@@ -35,6 +35,11 @@ export const PaperAnalysisPage = lazy(() =>
 export const ModelSettingsPage = lazy(() =>
   import('@/features/settings/pages').then((module) => ({ default: module.ModelSettingsPage })),
 )
+export const CollectionSettingsPage = lazy(() =>
+  import('@/features/settings/collection').then((module) => ({
+    default: module.CollectionSettingsPage,
+  })),
+)
 export const CrawlTaskPage = lazy(() =>
   import('@/features/collection/pages').then((module) => ({ default: module.CrawlTaskPage })),
 )

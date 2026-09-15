@@ -58,14 +58,9 @@ function profileDraft(profile?: LLMProfile): ProfileDraft {
 export function ModelSettingsPage() {
   const client = useQueryClient()
   const profiles = useQuery({ queryKey: ['llm-profiles'], queryFn: llmApi.profiles })
-  const scenes = useQuery({ queryKey: ['llm-scenes'], queryFn: llmApi.scenes })
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<ProfileDraft>(emptyDraft)
-  const refresh = () =>
-    Promise.all([
-      client.invalidateQueries({ queryKey: ['llm-profiles'] }),
-      client.invalidateQueries({ queryKey: ['llm-scenes'] }),
-    ])
+  const refresh = () => client.invalidateQueries({ queryKey: ['llm-profiles'] })
   const save = useMutation({
     mutationFn: () => {
       const payload = {
@@ -103,24 +98,15 @@ export function ModelSettingsPage() {
     },
     onError: (error) => toast.error(error.message),
   })
-  const bind = useMutation({
-    mutationFn: ({ scene, profileId }: { scene: string; profileId: number }) =>
-      llmApi.bindScene(scene, profileId),
-    onSuccess: async () => {
-      toast.success('场景默认模型已更新')
-      await client.invalidateQueries({ queryKey: ['llm-scenes'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-  if (profiles.isLoading || scenes.isLoading) return <LoadingState />
-  if (profiles.error || scenes.error) return <ErrorState error={profiles.error || scenes.error} />
+  if (profiles.isLoading) return <LoadingState />
+  if (profiles.error) return <ErrorState error={profiles.error} />
   const list = profiles.data || []
   return (
     <div className="page-shell">
       <PageHero
         eyebrow="System · Models"
         title="模型配置"
-        description="管理模型连接与各项 AI 工作的默认模型。"
+        description="管理大模型连接、模型名称和访问密钥。"
         metrics={[
           { label: 'Profiles', value: list.length },
           { label: 'Enabled', value: list.filter((item) => item.enabled).length },
@@ -235,38 +221,6 @@ export function ModelSettingsPage() {
         ) : (
           <EmptyState>尚未配置模型</EmptyState>
         )}
-      </Card>
-      <Card>
-        <PanelHeader title="场景默认模型" />
-        <div className="settings-rows">
-          {(scenes.data || []).map((scene) => (
-            <div className="settings-row" key={scene.scene}>
-              <div>
-                <strong>{scene.label}</strong>
-                <div className="muted">{scene.model_name || '未绑定'}</div>
-              </div>
-              <Select
-                aria-label={`${scene.label}默认模型`}
-                value={scene.profile_id || ''}
-                disabled={bind.isPending}
-                onChange={(event) =>
-                  bind.mutate({ scene: scene.scene, profileId: Number(event.target.value) })
-                }
-              >
-                <option value="" disabled>
-                  选择模型
-                </option>
-                {list
-                  .filter((profile) => profile.enabled)
-                  .map((profile) => (
-                    <option value={profile.id} key={profile.id}>
-                      {profile.name} · {profile.model_name}
-                    </option>
-                  ))}
-              </Select>
-            </div>
-          ))}
-        </div>
       </Card>
       <Modal
         open={open}

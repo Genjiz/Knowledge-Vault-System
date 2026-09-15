@@ -20,7 +20,7 @@ class TranslationProvider:
         self.model_name = model_name
         self.llm_service = llm_service
 
-    def translate_papers(self, papers):
+    def translate_papers(self, papers, profile_id=None):
         papers_data = []
         for index, paper in enumerate(papers):
             papers_data.append(
@@ -63,7 +63,7 @@ class TranslationProvider:
         else:
             try:
                 result = (self.llm_service or LLMService()).generate_text(
-                    "paper_translation", prompt
+                    "paper_translation", prompt, profile_id=profile_id
                 )
                 self.model_name = result.model_name
                 raw_response = result.text

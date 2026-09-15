@@ -61,12 +61,13 @@ class IngestionWorkflowTestCase(unittest.TestCase):
                 }
 
         service = IngestionService(providers={"foreign": FakeProvider()})
-        task, raw_issue = service.run_ingestion(
+        task, raw_issues = service.run_ingestion(
             source_type="foreign",
             journal_name="Information Processing & Management",
             year=2024,
             issue="6",
         )
+        raw_issue = raw_issues[0]
 
         self.assertEqual(task.status, "completed")
         self.assertEqual(raw_issue.paper_count, 1)
@@ -132,7 +133,8 @@ class IngestionWorkflowTestCase(unittest.TestCase):
 
         provider = MutableProvider()
         service = IngestionService(providers={"magtech": provider})
-        _, first_issue = service.run_ingestion("magtech", "情报学报", 2026, "3")
+        _, first_issues = service.run_ingestion("magtech", "情报学报", 2026, "3")
+        first_issue = first_issues[0]
         removed = Literature.query.filter_by(title="移除论文").one()
         retained = Literature.query.filter_by(title="保留论文").one()
         original_raw_paper_id = retained.collection_sources[0].raw_paper_id
@@ -144,7 +146,8 @@ class IngestionWorkflowTestCase(unittest.TestCase):
         provider.papers = [
             {"title": "保留论文", "authors": "官网修订作者", "doi": "10.1/keep"}
         ]
-        _, second_issue = service.run_ingestion("magtech", "情报学报", 2026, "3")
+        _, second_issues = service.run_ingestion("magtech", "情报学报", 2026, "3")
+        second_issue = second_issues[0]
         db.session.refresh(removed)
 
         self.assertEqual(first_issue.id, second_issue.id)
@@ -161,6 +164,189 @@ class IngestionWorkflowTestCase(unittest.TestCase):
         from app.collection.sources.registry import source_priority
 
         self.assertGreater(source_priority("ncpssd"), source_priority("elsevier"))
+
+    def test_year_ingestion_splits_papers_by_volume_and_issue(self):
+        from app.collection.services.ingestion_service import IngestionService
+        from app.papers.models import Journal
+
+        journal = Journal(
+            name="Information Processing & Management",
+            issn="0306-4573",
+            region="foreign",
+        )
+        db.session.add(journal)
+        db.session.commit()
+        calls = []
+
+        class FakeYearProvider:
+            source_id = "scopus"
+            region = "foreign"
+            ingest_scope = "year"
+
+            def fetch_issue(self, journal_name, year, issue, **kwargs):
+                calls.append((journal_name, year, issue, kwargs))
+                return {
+                    "issue": {
+                        "source_type": "scopus",
+                        "region": "foreign",
+                        "journal_name": journal_name,
+                        "year": year,
+                        "issue": "year",
+                        "volume": None,
+                        "paper_count_hint": 3,
+                        "language": "en",
+                    },
+                    "papers": [
+                        {
+                            "source_identifier": "2-s2.0-TEST001",
+                            "source_ref_json": json.dumps(
+                                {"eid": "2-s2.0-TEST001", "doi": "10.1/test"}
+                            ),
+                            "title": "Volume 62 issue 2PA",
+                            "authors": "Test Author",
+                            "doi": "10.1/test",
+                            "volume": "62",
+                            "issue": "2PA",
+                        },
+                        {
+                            "source_identifier": "2-s2.0-TEST002",
+                            "source_ref_json": json.dumps({"eid": "2-s2.0-TEST002"}),
+                            "title": "Volume 63 issue 2PA",
+                            "authors": "Test Author",
+                            "volume": "63",
+                            "issue": "2PA",
+                        },
+                        {
+                            "source_identifier": "2-s2.0-TEST003",
+                            "source_ref_json": json.dumps({"eid": "2-s2.0-TEST003"}),
+                            "title": "Unassigned paper",
+                            "authors": "Test Author",
+                            "volume": "63",
+                            "issue": None,
+                        },
+                    ],
+                }
+
+        service = IngestionService(providers={"scopus": FakeYearProvider()})
+        task, raw_issues = service.run_ingestion(
+            "scopus", journal.name, 2025, "ignored-client-value"
+        )
+
+        self.assertEqual(calls[0][-1], {"issn": "0306-4573"})
+        self.assertEqual(calls[0][2], "year")
+        self.assertEqual(task.issue, "year")
+        self.assertEqual(
+            [(item.volume, item.issue, item.paper_count) for item in raw_issues],
+            [("62", "2PA", 1), ("63", "2PA", 1), ("63", "unassigned", 1)],
+        )
+        self.assertEqual(len(task.raw_issues), 3)
+        literature = raw_issues[0].papers[0].literature_sources[0].literature
+        self.assertEqual(literature.volume, "62")
+        self.assertEqual(literature.issue, "2PA")
+        self.assertEqual(literature.doi, "10.1/test")
+
+    def test_targeted_year_refresh_replaces_only_requested_volume_issue(self):
+        from app.collection.services.ingestion_service import IngestionService
+        from app.papers.models import Journal
+
+        journal = Journal(name="IP&M", issn="0306-4573", region="foreign")
+        db.session.add(journal)
+        db.session.commit()
+
+        class MutableYearProvider:
+            source_id = "scopus"
+            region = "foreign"
+            ingest_scope = "year"
+
+            def __init__(self):
+                self.papers = [
+                    {"source_identifier": "a", "title": "A", "volume": "63", "issue": "1"},
+                    {"source_identifier": "b", "title": "B", "volume": "63", "issue": "2"},
+                ]
+
+            def fetch_issue(self, journal_name, year, issue, **kwargs):
+                return {
+                    "issue": {
+                        "source_type": "scopus",
+                        "region": "foreign",
+                        "journal_name": journal_name,
+                        "year": year,
+                        "issue": "year",
+                    },
+                    "papers": self.papers,
+                }
+
+        provider = MutableYearProvider()
+        service = IngestionService(providers={"scopus": provider})
+        _, initial = service.run_ingestion("scopus", journal.name, 2026, "year")
+        first_id, second_id = initial[0].id, initial[1].id
+
+        provider.papers = [
+            {"source_identifier": "a2", "title": "A revised", "volume": "63", "issue": "1"},
+            {"source_identifier": "b", "title": "B", "volume": "63", "issue": "2"},
+        ]
+        _, refreshed = service.run_ingestion(
+            "scopus",
+            journal.name,
+            2026,
+            "year",
+            target_volume="63",
+            target_issue="1",
+        )
+
+        self.assertEqual([item.id for item in refreshed], [first_id])
+        self.assertEqual(refreshed[0].papers[0].title, "A revised")
+        from app.collection.models import RawIssue
+
+        untouched = db.session.get(RawIssue, second_id)
+        self.assertEqual(untouched.papers[0].title, "B")
+
+    def test_targeted_year_refresh_does_not_clear_issue_when_source_returns_no_match(self):
+        from app.collection.sources.base import ProviderError
+        from app.collection.services.ingestion_service import IngestionService
+        from app.papers.models import Journal
+
+        journal = Journal(name="IP&M", issn="0306-4573", region="foreign")
+        db.session.add(journal)
+        db.session.commit()
+
+        class MutableYearProvider:
+            source_id = "scopus"
+            region = "foreign"
+            ingest_scope = "year"
+            papers = [{"source_identifier": "a", "title": "A", "volume": "63", "issue": "1"}]
+
+            def fetch_issue(self, journal_name, year, issue, **kwargs):
+                return {
+                    "issue": {
+                        "source_type": "scopus",
+                        "region": "foreign",
+                        "journal_name": journal_name,
+                        "year": year,
+                        "issue": "year",
+                    },
+                    "papers": self.papers,
+                }
+
+        provider = MutableYearProvider()
+        service = IngestionService(providers={"scopus": provider})
+        _, initial = service.run_ingestion("scopus", journal.name, 2026, "year")
+        raw_issue = initial[0]
+        provider.papers = []
+
+        with self.assertRaises(ProviderError):
+            service.run_ingestion(
+                "scopus",
+                journal.name,
+                2026,
+                "year",
+                target_volume="63",
+                target_issue="1",
+            )
+
+        db.session.refresh(raw_issue)
+        self.assertEqual(raw_issue.paper_count, 1)
+        self.assertEqual(raw_issue.papers[0].title, "A")
 
 
 if __name__ == "__main__":

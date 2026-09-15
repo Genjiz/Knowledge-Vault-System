@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 from app.core.extensions import db
 from app.papers.models.base import BaseModel
 
@@ -12,6 +10,13 @@ class PaperAnalysis(BaseModel):
     profile_id = db.Column(db.Integer, db.ForeignKey("llm_profile.id", ondelete="SET NULL"))
     model_name = db.Column(db.String(255))
     paper_count = db.Column(db.Integer, nullable=False, default=0)
+    prompt_template_version = db.Column(db.String(100), nullable=False, default="paper-analysis-v1")
+    prompt_template_snapshot = db.Column(db.Text)
+    custom_instruction = db.Column(db.Text)
+    include_fulltext = db.Column(db.Boolean, nullable=False, default=False)
+    fulltext_count = db.Column(db.Integer, nullable=False, default=0)
+    fulltext_failed_count = db.Column(db.Integer, nullable=False, default=0)
+    fulltext_error_message = db.Column(db.Text)
     content_markdown = db.Column(db.Text)
     artifact_md_path = db.Column(db.String(500))
     error_message = db.Column(db.Text)
@@ -37,6 +42,13 @@ class PaperAnalysis(BaseModel):
                 "profile_name": self.profile.name if self.profile else None,
                 "model_name": self.model_name,
                 "paper_count": self.paper_count,
+                "prompt_template_version": self.prompt_template_version,
+                "prompt_template_snapshot": self.prompt_template_snapshot,
+                "custom_instruction": self.custom_instruction,
+                "include_fulltext": self.include_fulltext,
+                "fulltext_count": self.fulltext_count,
+                "fulltext_failed_count": self.fulltext_failed_count,
+                "fulltext_error_message": self.fulltext_error_message,
                 "artifact_md_path": self.artifact_md_path,
                 "error_message": self.error_message,
                 "started_at": self.started_at.isoformat() if self.started_at else None,
@@ -65,6 +77,11 @@ class PaperAnalysisItem(BaseModel):
     literature_id = db.Column(
         db.Integer, db.ForeignKey("literature.id", ondelete="SET NULL"), index=True
     )
+    text_asset_id = db.Column(
+        db.Integer,
+        db.ForeignKey("literature_text_asset.id", ondelete="SET NULL"),
+        index=True,
+    )
     sort_index = db.Column(db.Integer, nullable=False, default=0)
     title = db.Column(db.String(500), nullable=False)
     authors = db.Column(db.Text)
@@ -77,6 +94,7 @@ class PaperAnalysisItem(BaseModel):
 
     analysis = db.relationship("PaperAnalysis", back_populates="items")
     literature = db.relationship("Literature")
+    text_asset = db.relationship("LiteratureTextAsset")
 
     @classmethod
     def from_literature(cls, analysis_id, literature, sort_index):
@@ -98,6 +116,7 @@ class PaperAnalysisItem(BaseModel):
         return PaperAnalysisItem(
             analysis_id=analysis_id,
             literature_id=self.literature_id,
+            text_asset_id=self.text_asset_id,
             sort_index=self.sort_index,
             title=self.title,
             authors=self.authors,
@@ -115,6 +134,7 @@ class PaperAnalysisItem(BaseModel):
             {
                 "analysis_id": self.analysis_id,
                 "literature_id": self.literature_id,
+                "text_asset_id": self.text_asset_id,
                 "sort_index": self.sort_index,
                 "title": self.title,
                 "authors": self.authors,

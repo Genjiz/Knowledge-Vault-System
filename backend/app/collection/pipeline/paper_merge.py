@@ -16,7 +16,21 @@ from app.papers.services.paper_service import (
 
 
 _REGION_LANGUAGE = {"domestic": "zh", "foreign": "en"}
-_SOURCE_REGION = {"ncpssd": "domestic", "magtech": "domestic", "elsevier": "foreign"}
+_SOURCE_REGION = {
+    "ncpssd": "domestic",
+    "magtech": "domestic",
+    "elsevier": "foreign",
+    "scopus": "foreign",
+}
+_MISSING_VOLUME_MARKERS = {"unknown"}
+_MISSING_ISSUE_MARKERS = {"year", "unassigned"}
+
+
+def _normalize_period_value(value, missing_markers):
+    normalized = str(value or "").strip()
+    if not normalized or normalized.casefold() in missing_markers:
+        return None
+    return normalized
 
 
 def _resolve_language(raw_issue):
@@ -32,13 +46,15 @@ class PaperMergeService:
 
     def _paper_data(self, raw_paper):
         raw_issue = raw_paper.raw_issue
+        volume = raw_paper.volume or raw_issue.volume
+        issue = raw_paper.issue or raw_issue.issue
         return {
             "title": clean_title_text(raw_paper.title),
             "authors": raw_paper.authors or "",
             "journal": raw_issue.journal_name,
             "year": raw_issue.year,
-            "volume": raw_issue.volume,
-            "issue": raw_issue.issue,
+            "volume": _normalize_period_value(volume, _MISSING_VOLUME_MARKERS),
+            "issue": _normalize_period_value(issue, _MISSING_ISSUE_MARKERS),
             "abstract": raw_paper.abstract,
             "pages": raw_paper.pages,
             "doi": raw_paper.doi,
@@ -138,7 +154,7 @@ class PaperMergeService:
                 source_type, value = selected
                 setattr(literature, field, value)
                 origins[field] = source_type
-            elif field not in ("title", "authors", "journal", "year", "issue"):
+            elif field not in ("title", "authors", "journal", "year"):
                 setattr(literature, field, None)
                 origins.pop(field, None)
 

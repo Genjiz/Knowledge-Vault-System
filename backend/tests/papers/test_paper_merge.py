@@ -111,6 +111,45 @@ class PaperMergeTestCase(unittest.TestCase):
         literature = PaperMergeService().upsert_raw_paper(raw_paper)
         self.assertEqual(literature.language, "zh")
 
+    def test_scopus_internal_group_markers_do_not_leak_into_literature(self):
+        from app.collection.models import RawIssue, RawPaper
+        from app.collection.pipeline.paper_merge import PaperMergeService
+
+        raw_issue = RawIssue(
+            source_type="scopus",
+            region="foreign",
+            journal_name="Information Processing & Management",
+            year=2026,
+            volume="unknown",
+            issue="year",
+            paper_count=1,
+        )
+        db.session.add(raw_issue)
+        db.session.flush()
+        raw_paper = RawPaper(
+            raw_issue_id=raw_issue.id,
+            title="Unassigned Scopus paper",
+            authors="Author",
+            volume=None,
+            issue=None,
+        )
+        db.session.add(raw_paper)
+        db.session.commit()
+
+        service = PaperMergeService()
+        literature = service.upsert_raw_paper(raw_paper)
+        self.assertIsNone(literature.volume)
+        self.assertIsNone(literature.issue)
+
+        literature.issue = "year"
+        literature.volume = "unknown"
+        raw_issue.issue = "unassigned"
+        db.session.commit()
+
+        service.recompute_literature(literature)
+        self.assertIsNone(literature.volume)
+        self.assertIsNone(literature.issue)
+
     def test_upsert_fills_existing_paper_without_overwrite(self):
         from app.papers.models import Literature
         from app.collection.pipeline.paper_merge import PaperMergeService

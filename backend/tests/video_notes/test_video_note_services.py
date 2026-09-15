@@ -58,7 +58,10 @@ class VideoNoteExecutionServiceTestCase(unittest.TestCase):
                 return str(transcript_path)
 
         class FakeNoteGenerationService:
-            def generate_note(self, *, transcript_text, source_url, bvid, video_title):
+            def generate_note(
+                self, *, transcript_text, source_url, bvid, video_title, profile_id
+            ):
+                self.profile_id = profile_id
                 return f"# {video_title}\n\n- {bvid}\n- {source_url}\n- {transcript_text.strip()}"
 
         task_service = TaskService()
@@ -67,6 +70,8 @@ class VideoNoteExecutionServiceTestCase(unittest.TestCase):
             source_url="https://www.bilibili.com/video/BV1qdXoBdEYy/",
             platform="bilibili",
             bvid="BV1qdXoBdEYy",
+            profile_id=17,
+            model_name="selected-model",
         )
 
         execution_service = ExecutionService(
@@ -83,6 +88,7 @@ class VideoNoteExecutionServiceTestCase(unittest.TestCase):
         self.assertTrue(Path(refreshed.transcript_path).exists())
         self.assertTrue(Path(refreshed.note_path).exists())
         self.assertTrue(Path(refreshed.metadata_path).exists())
+        self.assertEqual(execution_service.note_generation_service.profile_id, 17)
 
         metadata = json.loads(Path(refreshed.metadata_path).read_text(encoding="utf-8"))
         self.assertEqual(metadata["task_id"], task.id)

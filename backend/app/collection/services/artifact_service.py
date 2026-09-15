@@ -16,6 +16,7 @@ class ArtifactService:
 
     def export_raw_issue(self, raw_issue):
         journal = _slugify_path_part(raw_issue.journal_name)
+        volume = _slugify_path_part(raw_issue.volume or "unknown")
         issue = _slugify_path_part(raw_issue.issue)
         artifact_path = (
             self._artifact_root()
@@ -23,6 +24,7 @@ class ArtifactService:
             / raw_issue.source_type
             / journal
             / str(raw_issue.year)
+            / volume
             / f"{issue}.json"
         )
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,6 +44,7 @@ class ArtifactService:
     def export_analysis(self, analysis):
         raw_issue = analysis.raw_issue
         journal = _slugify_path_part(raw_issue.journal_name)
+        volume = _slugify_path_part(raw_issue.volume or "unknown")
         issue = _slugify_path_part(raw_issue.issue)
         artifact_path = (
             self._artifact_root()
@@ -49,6 +52,7 @@ class ArtifactService:
             / raw_issue.source_type
             / journal
             / str(raw_issue.year)
+            / volume
             / f"{issue}.md"
         )
         artifact_path.parent.mkdir(parents=True, exist_ok=True)

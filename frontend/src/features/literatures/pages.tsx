@@ -53,6 +53,7 @@ const dataSourceNames: Record<string, string> = {
   magtech: '期刊官网',
   ncpssd: '国家哲社文献中心',
   elsevier: 'Elsevier',
+  scopus: 'Scopus API',
   retained: '已保留（原来源已删除）',
 }
 const noteTypes = [
@@ -298,7 +299,9 @@ export function LiteratureListPage() {
                     </td>
                     <td>{item.year || '-'}</td>
                     <td>
-                      <Badge tone={statusTone(item.status)}>{item.status || '未读'}</Badge>
+                      <Badge className="reading-status" tone={statusTone(item.status)}>
+                        {item.status || '未读'}
+                      </Badge>
                     </td>
                     <td>
                       <div className="actions">

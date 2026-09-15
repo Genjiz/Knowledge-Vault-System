@@ -7,9 +7,9 @@ Knowledge Vault 是一个正在持续演进的个人知识库项目。它最初�
 ## 当前能力
 
 - 文献管理：文献条目、标签、文件夹、笔记、统计、备份
-- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Elsevier）、采集任务、原始期号与论文入库、Magtech 官网全文 PDF 补采、翻译、JSON/Markdown 导出
-- 论文分析：按单期、多期或多篇统一文献创建异步综合分析，支持运行历史与模型切换
-- 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型，并按论文分析、论文翻译、视频笔记绑定默认模型
+- 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Scopus API / Elsevier）、按期或按年查询题录并按真实卷期入库、Magtech 官网全文 PDF 补采、翻译、JSON/Markdown 导出
+- 论文分析：整期或从整个文献库检索自选论文创建异步综合分析，支持默认 Prompt 查看、自定义要求、可选 PDF 全文、运行历史与显式模型选择
+- 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型；论文分析、论文翻译和视频笔记在任务入口选择具体模型
 - 视频转笔记：输入 B 站链接，自动执行音频下载、Whisper 转写和模型笔记生成
 - 单一主项目结构：前后端与采集能力已统一到同一个仓库中维护
 
@@ -26,7 +26,7 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 
 - 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router / Query + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
-- 采集与 AI：requests + beautifulsoup4 + DrissionPage + google-genai + openai
+- 采集与 AI：requests + beautifulsoup4 + DrissionPage + PyMuPDF4LLM + Docling + google-genai + openai
 
 ## 仓库结构
 
@@ -72,7 +72,7 @@ cd ..
 
 ### 3. 配置模型
 
-启动系统后可从侧边栏 `System → 模型配置` 新增模型档案、填写 Base URL / 模型名称 / API Key，并设置各场景默认模型。页面保存的 API Key 只写入根目录 `.env` 的 `LLM_API_KEYS_JSON`，不会进入数据库或 API 响应。
+启动系统后可从侧边栏 `System → 模型配置` 新增模型档案、填写 Base URL / 模型名称 / API Key。页面保存的 API Key 只写入根目录 `.env` 的 `LLM_API_KEYS_JSON`，不会进入数据库或 API 响应；使用大模型的任务在各自入口选择具体模型。
 
 系统保留原有 Gemini Key 作为兼容回退，优先级如下：
 
@@ -88,6 +88,8 @@ GEMINI_PROXY_URL=http://127.0.0.1:7890
 ```
 
 也支持直接在 `.env` 中使用 `HTTPS_PROXY` 或 `HTTP_PROXY`。
+
+国外期刊题录可使用 Scopus API。在「期刊与采集源」中填写期刊 ISSN 并启用 `Scopus API`，再到「Collection → 采集设置」保存 Elsevier Research Products API Key。密钥写入根目录 `.env` 的 `ELSEVIER_API_KEY`，不会进入数据库或 API 响应；Scopus 请求固定直连，不读取系统代理，COMPLETE 权益需要校园网或 aTrust 对应的出口 IP。
 
 ### 4. 启动与关闭
 
@@ -145,12 +147,12 @@ npm run format:check
 ## 模块入口
 
 - 文献管理：侧边栏 `Workspace`
-- 论文分析：侧边栏 `Workspace → 论文分析`
+- 论文分析：侧边栏 `Analysis → 论文分析`
 - 采集中心：侧边栏 `Collection`
 - 视频转笔记：侧边栏 `Media`
 - 模型配置：侧边栏 `System`
 
-视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`），并在模型配置页为视频笔记场景绑定已配置 API Key 的模型。使用 Gemini 且本机无法直连时，还需在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
+视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`），并在创建任务时选择已配置 API Key 的模型。使用 Gemini 且本机无法直连时，还需在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
 
 视频转笔记模块的任务产物会保存到：
 

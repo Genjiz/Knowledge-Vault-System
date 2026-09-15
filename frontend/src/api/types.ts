@@ -88,6 +88,7 @@ export interface SourceMeta {
   source_id: string
   display_name: string
   region: string
+  ingest_scope: 'issue' | 'year'
   capabilities: Record<string, boolean>
   config_fields: SourceConfigField[]
 }
@@ -134,6 +135,11 @@ export interface RawPaper {
   keywords?: string
   doi?: string
   pages?: string
+  volume?: string
+  issue?: string
+}
+export interface ElsevierKeyStatus {
+  has_api_key: boolean
 }
 export interface RawIssue {
   id: number
@@ -150,6 +156,9 @@ export interface RawIssue {
   abstract_collected_count?: number
   fulltext_collected_count?: number
   translation_status?: string
+  translation_profile_id?: number | null
+  translation_profile_name?: string | null
+  translation_model_name?: string | null
   analysis_status?: string
   papers?: RawPaper[]
 }
@@ -177,7 +186,8 @@ export interface ProbeIssuesResult {
 }
 export interface CrawlTaskResult {
   task: CrawlTask
-  raw_issue: RawIssue
+  raw_issue?: RawIssue | null
+  raw_issues: RawIssue[]
   fulltext_task?: FullTextTask
   fulltext_error?: string
 }
@@ -223,17 +233,11 @@ export interface LLMProfile {
   last_check_message?: string | null
   last_checked_at?: string | null
 }
-export interface LLMSceneBinding {
-  scene: 'paper_analysis' | 'paper_translation' | 'video_note'
-  label: string
-  profile_id?: number | null
-  profile_name?: string | null
-  model_name?: string | null
-}
 export interface AnalysisIssueOption {
   journal_id?: number | null
   journal: string
   year: number
+  volume: string
   issue: string
   paper_count: number
 }
@@ -244,7 +248,9 @@ export interface PaperAnalysisItem {
   authors?: string
   journal?: string
   year?: number | null
+  volume?: string
   issue?: string
+  text_asset_id?: number | null
   abstract?: string
   keywords?: string
 }
@@ -256,11 +262,22 @@ export interface PaperAnalysis {
   profile_name?: string | null
   model_name?: string | null
   paper_count: number
+  prompt_template_version?: string
+  prompt_template_snapshot?: string | null
+  custom_instruction?: string | null
+  include_fulltext?: boolean
+  fulltext_count?: number
+  fulltext_failed_count?: number
+  fulltext_error_message?: string | null
   content_markdown?: string | null
   error_message?: string | null
   created_at?: string
   finished_at?: string | null
   items?: PaperAnalysisItem[]
+}
+export interface PaperAnalysisPromptTemplate {
+  version: string
+  content: string
 }
 export interface PaperAnalysisPage {
   items: PaperAnalysis[]
@@ -272,6 +289,9 @@ export interface VideoTask {
   bvid?: string
   video_title?: string
   status: string
+  profile_id?: number | null
+  profile_name?: string | null
+  model_name?: string | null
   current_step?: string
   progress_message?: string
   error_message?: string

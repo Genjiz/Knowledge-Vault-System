@@ -52,11 +52,39 @@ class NoteGenerationServiceTestCase(unittest.TestCase):
                 source_url="https://www.bilibili.com/video/BV1qdXoBdEYy/",
                 bvid="BV1qdXoBdEYy",
                 video_title="test",
+                profile_id=1,
             )
 
         message = str(ctx.exception)
         self.assertIn("generativelanguage.googleapis.com:443", message)
         self.assertIn("HTTPS_PROXY/HTTP_PROXY", message)
+
+    def test_generate_note_passes_explicit_profile_to_llm_service(self):
+        from app.core.llm.service import GenerationResult
+
+        class FakeLLMService:
+            def __init__(self):
+                self.calls = []
+
+            def generate_text(self, scene, prompt, profile_id=None):
+                self.calls.append((scene, profile_id))
+                return GenerationResult(
+                    text="# 笔记", profile_id=profile_id, model_name="selected-model"
+                )
+
+        llm = FakeLLMService()
+        service = NoteGenerationService(llm_service=llm)
+
+        result = service.generate_note(
+            transcript_text="字幕",
+            source_url="https://www.bilibili.com/video/BV1qdXoBdEYy/",
+            bvid="BV1qdXoBdEYy",
+            video_title="测试",
+            profile_id=8,
+        )
+
+        self.assertEqual(result, "# 笔记")
+        self.assertEqual(llm.calls, [("video_note", 8)])
 
 
 if __name__ == "__main__":

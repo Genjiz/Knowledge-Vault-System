@@ -36,7 +36,7 @@ class AnalysisProvider:
             formatted_texts.append("\n".join(lines))
         return "\n\n".join(formatted_texts)
 
-    def generate_analysis(self, raw_issue, papers):
+    def generate_analysis(self, raw_issue, papers, profile_id):
         prompt_template = crawler_config.get_prompt("journal_analysis")
         if not prompt_template:
             raise ProviderError("journal_analysis prompt is not configured")
@@ -48,7 +48,9 @@ class AnalysisProvider:
         prompt = f"{prompt}\n\n{self._format_papers_for_prompt(papers)}"
 
         try:
-            result = (self.llm_service or LLMService()).generate_text("paper_analysis", prompt)
+            result = (self.llm_service or LLMService()).generate_text(
+                "paper_analysis", prompt, profile_id=profile_id
+            )
         except Exception as exc:
             raise ProviderError(f"Analysis request failed: {exc}") from exc
         self.model_name = result.model_name

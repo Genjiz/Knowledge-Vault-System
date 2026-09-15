@@ -48,7 +48,9 @@ class NoteGenerationService:
 
         return normalized
 
-    def generate_note(self, *, transcript_text, source_url, bvid, video_title):
+    def generate_note(
+        self, *, transcript_text, source_url, bvid, video_title, profile_id
+    ):
         prompt = (
             "我有一份 B 站视频的字幕文件（SRT 文本），请根据字幕内容生成一份结构化笔记。\n\n"
             "要求：\n"
@@ -80,7 +82,9 @@ class NoteGenerationService:
                 ) from exc
         else:
             try:
-                result = (self.llm_service or LLMService()).generate_text("video_note", prompt)
+                result = (self.llm_service or LLMService()).generate_text(
+                    "video_note", prompt, profile_id=profile_id
+                )
                 self.model_name = result.model_name
                 raw = result.text
             except Exception as exc:

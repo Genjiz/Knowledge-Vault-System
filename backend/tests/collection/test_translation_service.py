@@ -25,8 +25,18 @@ class TranslationServiceTestCase(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         from app.collection.models import RawIssue, RawPaper  # noqa: F401
+        from app.core.llm.models import LLMProfile
 
         db.create_all()
+        profile = LLMProfile(
+            name="翻译测试模型",
+            protocol="gemini",
+            model_name="selected-model",
+            enabled=True,
+        )
+        db.session.add(profile)
+        db.session.commit()
+        self.profile_id = profile.id
 
     def tearDown(self):
         db.session.remove()
@@ -65,7 +75,10 @@ class TranslationServiceTestCase(unittest.TestCase):
         ArtifactService().export_raw_issue(raw_issue)
 
         class FakeTranslationProvider:
-            def translate_papers(self, papers):
+            model_name = None
+
+            def translate_papers(self, papers, profile_id):
+                self.model_name = "selected-model"
                 return [
                     {
                         "title_zh": "论文A",
@@ -74,11 +87,13 @@ class TranslationServiceTestCase(unittest.TestCase):
                 ]
 
         service = TranslationService(provider=FakeTranslationProvider())
-        updated_issue = service.translate_issue(raw_issue.id)
+        updated_issue = service.translate_issue(raw_issue.id, profile_id=self.profile_id)
 
         self.assertEqual(updated_issue.translation_status, "completed")
         self.assertEqual(updated_issue.papers[0].title_zh, "论文A")
         self.assertEqual(updated_issue.papers[0].translation_status, "completed")
+        self.assertEqual(updated_issue.translation_profile_id, self.profile_id)
+        self.assertEqual(updated_issue.translation_model_name, "selected-model")
 
         payload = json.loads(Path(updated_issue.raw_json_path).read_text(encoding="utf-8"))
         self.assertEqual(payload["papers"][0]["title_zh"], "论文A")

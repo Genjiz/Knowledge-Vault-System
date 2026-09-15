@@ -1,0 +1,34 @@
+{
+  "search-results": {
+    "opensearch:totalResults": "2",
+    "entry": [
+      {
+        "eid": "2-s2.0-TEST001",
+        "pii": "S0306457325000012",
+        "prism:doi": "10.1016/j.ipm.2025.100001",
+        "dc:title": "First paper",
+        "author": [
+          {"given-name": "Ada", "surname": "Lovelace"},
+          {"authname": "Turing, A."}
+        ],
+        "dc:description": "First abstract",
+        "authkeywords": "retrieval | knowledge systems",
+        "prism:pageRange": "100-112",
+        "prism:coverDate": "2025-02-01",
+        "prism:volume": "62",
+        "prism:issueIdentifier": "2PA"
+      },
+      {
+        "dc:identifier": "SCOPUS_ID:TEST002",
+        "prism:doi": "10.1016/j.ipm.2025.100002",
+        "dc:title": "Second paper",
+        "dc:creator": "Grace Hopper",
+        "prism:startingPage": "113",
+        "prism:endingPage": "120",
+        "prism:coverDate": "2025-03-01",
+        "prism:volume": "62",
+        "prism:issueIdentifier": "3"
+      }
+    ]
+  }
+}

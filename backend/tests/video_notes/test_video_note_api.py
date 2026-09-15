@@ -27,6 +27,17 @@ class VideoNoteApiTestCase(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         db.create_all()
+        from app.core.llm.models import LLMProfile
+
+        profile = LLMProfile(
+            name="视频测试模型",
+            protocol="gemini",
+            model_name="gemini-video-test",
+            enabled=True,
+        )
+        db.session.add(profile)
+        db.session.commit()
+        self.profile_id = profile.id
         self.client = self.app.test_client()
 
     def tearDown(self):
@@ -44,13 +55,27 @@ class VideoNoteApiTestCase(unittest.TestCase):
     def test_create_video_note_task_returns_task_payload(self):
         response = self.client.post(
             "/api/video-note-tasks",
-            json={"source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/"},
+            json={
+                "source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/",
+                "profile_id": self.profile_id,
+            },
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()["data"]
         self.assertEqual(payload["status"], "pending")
         self.assertEqual(payload["bvid"], "BV1qdXoBdEYy")
+        self.assertEqual(payload["profile_id"], self.profile_id)
+        self.assertEqual(payload["model_name"], "gemini-video-test")
+
+    def test_create_video_note_task_requires_enabled_profile(self):
+        missing = self.client.post(
+            "/api/video-note-tasks",
+            json={"source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/"},
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("模型", missing.get_json()["message"])
 
     def test_task_marked_failed_when_execution_raises(self):
         from app.video_notes.routes.task import _mark_failed_in_app_context
@@ -64,7 +89,10 @@ class VideoNoteApiTestCase(unittest.TestCase):
 
         response = self.client.post(
             "/api/video-note-tasks",
-            json={"source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/"},
+            json={
+                "source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/",
+                "profile_id": self.profile_id,
+            },
         )
         task_id = response.get_json()["data"]["id"]
 
@@ -77,7 +105,7 @@ class VideoNoteApiTestCase(unittest.TestCase):
     def test_create_video_note_task_rejects_invalid_url(self):
         response = self.client.post(
             "/api/video-note-tasks",
-            json={"source_url": "https://example.com/not-bilibili"},
+            json={"source_url": "https://example.com/not-bilibili", "profile_id": self.profile_id},
         )
 
         self.assertEqual(response.status_code, 400)
@@ -85,7 +113,10 @@ class VideoNoteApiTestCase(unittest.TestCase):
     def test_list_video_note_tasks_returns_created_task(self):
         create_response = self.client.post(
             "/api/video-note-tasks",
-            json={"source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/"},
+            json={
+                "source_url": "https://www.bilibili.com/video/BV1qdXoBdEYy/",
+                "profile_id": self.profile_id,
+            },
         )
         task_id = create_response.get_json()["data"]["id"]
 

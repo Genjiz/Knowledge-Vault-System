@@ -2,16 +2,17 @@ import { api } from './client'
 import type {
   CrawlTask,
   CrawlTaskResult,
+  ElsevierKeyStatus,
   Folder,
   FullTextTask,
   Journal,
   LLMProfile,
-  LLMSceneBinding,
   Literature,
   LiteraturePage,
   Note,
   PaperAnalysis,
   PaperAnalysisPage,
+  PaperAnalysisPromptTemplate,
   AnalysisIssueOption,
   ProbeIssuesResult,
   RawIssue,
@@ -81,11 +82,25 @@ export const journalApi = {
 export const crawlApi = {
   tasks: () => data<CrawlTask[]>(api.get('/crawl-tasks', { params: { _t: Date.now() } })),
   create: (p: object) => data<CrawlTaskResult>(api.post('/crawl-tasks', p, { timeout: 180_000 })),
-  issues: () => data<RawIssuePage>(api.get('/raw-issues', { params: { _t: Date.now() } })),
+  issues: () =>
+    data<RawIssuePage>(
+      api.get('/raw-issues', { params: { page: 1, per_page: 500, _t: Date.now() } }),
+    ),
   issue: (id: string | number) => data<RawIssue>(api.get(`/raw-issues/${id}`)),
   removeIssue: (id: string | number) => data(api.delete(`/raw-issues/${id}`)),
-  translate: (id: string | number) =>
-    data<RawIssue>(api.post(`/raw-issues/${id}/translate`, {}, { timeout: 180_000 })),
+  translate: (id: string | number, profileId: number) =>
+    data<RawIssue>(
+      api.post(`/raw-issues/${id}/translate`, { profile_id: profileId }, { timeout: 180_000 }),
+    ),
+  refreshIssue: (id: string | number) =>
+    data<CrawlTaskResult>(api.post(`/raw-issues/${id}/refresh`, {}, { timeout: 180_000 })),
+}
+export const collectionApi = {
+  elsevierKey: () => data<ElsevierKeyStatus>(api.get('/collection/elsevier-key')),
+  setElsevierKey: (apiKey: string) =>
+    data<ElsevierKeyStatus>(api.put('/collection/elsevier-key', { api_key: apiKey })),
+  clearElsevierKey: () =>
+    data<ElsevierKeyStatus>(api.put('/collection/elsevier-key', { clear: true })),
 }
 export const fulltextApi = {
   list: (params?: {
@@ -109,14 +124,13 @@ export const llmApi = {
     data<LLMProfile>(api.put(`/llm/profiles/${id}`, payload)),
   removeProfile: (id: number) => data(api.delete(`/llm/profiles/${id}`)),
   testProfile: (id: number) => data<LLMProfile>(api.post(`/llm/profiles/${id}/test`)),
-  scenes: () => data<LLMSceneBinding[]>(api.get('/llm/scenes')),
-  bindScene: (scene: string, profileId: number) =>
-    data<LLMSceneBinding>(api.put(`/llm/scenes/${scene}`, { profile_id: profileId })),
 }
 export const paperAnalysisApi = {
   list: () => data<PaperAnalysisPage>(api.get('/paper-analyses')),
   get: (id: number) => data<PaperAnalysis>(api.get(`/paper-analyses/${id}`)),
   issues: () => data<AnalysisIssueOption[]>(api.get('/paper-analyses/issues')),
+  promptTemplate: () =>
+    data<PaperAnalysisPromptTemplate>(api.get('/paper-analyses/prompt-template')),
   preview: (payload: Record<string, unknown>) =>
     data<Literature[]>(api.post('/paper-analyses/selection-preview', payload)),
   create: (payload: Record<string, unknown>) =>

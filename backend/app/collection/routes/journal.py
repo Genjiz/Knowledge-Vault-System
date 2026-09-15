@@ -224,6 +224,10 @@ def replace_journal_sources(journal_id):
             return error_response(
                 f"{meta['display_name']} 缺少必填配置项：{', '.join(missing)}"
             )
+        if enabled and meta["ingest_scope"] == "year" and not (journal.issn or "").strip():
+            return error_response(
+                f"{meta['display_name']} 按 ISSN 检索，请先填写期刊 ISSN"
+            )
         desired.append(
             {
                 "source_id": source_id,
@@ -275,7 +279,12 @@ def test_journal_source(journal_id, source_id):
 
     config = _load_config(row)
     try:
-        result = _runner().test_connection(source_id, config, journal_name=journal.name)
+        result = _runner().test_connection(
+            source_id,
+            config,
+            journal_name=journal.name,
+            issn=journal.issn,
+        )
     except Exception as exc:  # 源实现抛出的任何异常都按失败落库，不向上冒泡
         result = {"status": "failed", "message": str(exc)}
 

@@ -36,6 +36,10 @@ def artifacts_root() -> Path:
     return data_root() / "artifacts"
 
 
+def literature_text_assets_root() -> Path:
+    return artifacts_root() / "literature-text"
+
+
 def crawler_artifacts_root() -> Path:
     return artifacts_root() / "crawler"
 

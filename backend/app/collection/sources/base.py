@@ -7,6 +7,7 @@
 
 - ``source_id``：源的唯一标识，同时作为 raw_issue / crawl_task 的采集身份
 - ``region``：期刊来源区域（domestic / foreign），用于语言推断与前端分组
+- ``ingest_scope``：采集粒度（issue / year），用于任务参数校验与前端表单切换
 - ``capabilities``：可选能力开关；未实现的可选方法必须声明为 False
 - ``config_fields``：该源在期刊配置中需要填写的字段，前端据此动态渲染配置表单
 """
@@ -32,6 +33,7 @@ class SourceAdapter:
     display_name = ""
     region = ""
     metadata_priority = 100
+    ingest_scope = "issue"
     capabilities = {
         "list_issues": False,
         "download_pdf": False,
