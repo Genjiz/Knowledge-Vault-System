@@ -974,7 +974,7 @@ export function LiteratureDetailPage() {
         {latestFulltextTask && (
           <div className={`alert mt-4 ${latestFulltextTask.failed_count ? 'alert--warning' : ''}`}>
             <div className="actions justify-between">
-              <strong>全文任务：{fullTextStatusLabel(latestFulltextTask.status)}</strong>
+              <strong>全文任务</strong>
               <Badge tone={statusTone(latestFulltextTask.status)}>
                 {fullTextStatusLabel(latestFulltextTask.status)}
               </Badge>

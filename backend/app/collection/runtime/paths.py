@@ -43,3 +43,17 @@ def find_chrome_executable():
         if candidate and Path(candidate).exists():
             return Path(candidate)
     return None
+
+
+def find_edge_executable():
+    """查找普通 Edge；显式浏览器路径仅在确实指向 Edge 时复用。"""
+    override = os.environ.get("CRAWLER_BROWSER_PATH")
+    candidates = [
+        override if override and Path(override).name.lower() == "msedge.exe" else None,
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return Path(candidate)
+    return None

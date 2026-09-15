@@ -292,7 +292,11 @@ class FullTextService:
                         raw_paper.raw_issue.journal_name,
                     )
                     sources[item.source_type] = source
-                result = source.download_pdf(reference.paper_ref)
+                result = source.download_pdf(
+                    reference.paper_ref,
+                    download_dir=Path(current_app.config["UPLOAD_FOLDER"]),
+                    max_pdf_size=self.max_pdf_size,
+                )
                 self._save_pdf(task, item, literature, raw_paper, result)
                 item.status = "completed"
                 item.failure_code = None

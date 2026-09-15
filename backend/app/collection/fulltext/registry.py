@@ -9,7 +9,11 @@ from app.collection.fulltext.base import FullTextReference
 
 _MAGTECH_ARTICLE_RE = re.compile(r"(?:article_|abstract)(\d+)\.shtml", re.IGNORECASE)
 _SCIENCEDIRECT_PII_RE = re.compile(r"/pii/([^/?#]+)", re.IGNORECASE)
-_VALID_PII_RE = re.compile(r"^[A-Za-z0-9]+$")
+_COMPACT_PII_RE = re.compile(r"^S[0-9X]{16}$", re.IGNORECASE)
+_LEGACY_PII_RE = re.compile(
+    r"^S[0-9X]{4}-[0-9X]{4}\([0-9]{2}\)[0-9]{5}-[0-9X]$",
+    re.IGNORECASE,
+)
 
 
 def _source_refs(raw_paper):
@@ -18,6 +22,15 @@ def _source_refs(raw_paper):
     except (TypeError, ValueError):
         value = {}
     return value if isinstance(value, dict) else {}
+
+
+def _normalize_sciencedirect_pii(value):
+    pii = str(value or "").strip()
+    if _COMPACT_PII_RE.fullmatch(pii):
+        return pii.upper()
+    if _LEGACY_PII_RE.fullmatch(pii):
+        return re.sub(r"[-()]", "", pii).upper()
+    return ""
 
 
 def resolve_fulltext_reference(raw_paper):
@@ -43,7 +56,8 @@ def resolve_fulltext_reference(raw_paper):
     if not pii and is_sciencedirect:
         match = _SCIENCEDIRECT_PII_RE.search(parsed.path)
         pii = match.group(1) if match else ""
-    if pii and _VALID_PII_RE.fullmatch(pii):
+    pii = _normalize_sciencedirect_pii(pii)
+    if pii:
         article_url = f"https://www.sciencedirect.com/science/article/pii/{pii}"
         paper_ref = {"pii": pii}
         doi = str(refs.get("doi") or raw_paper.doi or "").strip()

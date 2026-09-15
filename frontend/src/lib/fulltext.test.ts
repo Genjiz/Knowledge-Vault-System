@@ -13,9 +13,10 @@ describe('fulltext task presentation', () => {
     expect(isFullTextActive({ status: 'waiting_user' })).toBe(true)
   })
 
-  it('shows the correct action for verification and blocked network states', () => {
+  it('shows recovery actions without assuming the user changed networks', () => {
     expect(fullTextStatusLabel('waiting_user')).toBe('等待用户处理')
     expect(fullTextActionLabel('verification_required')).toBe('验证完成后继续')
-    expect(fullTextActionLabel('access_blocked')).toBe('网络切换后继续')
+    expect(fullTextActionLabel('access_blocked')).toBe('继续下载')
+    expect(fullTextActionLabel('browser_unavailable')).toBe('继续下载')
   })
 })

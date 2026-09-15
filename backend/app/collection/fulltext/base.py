@@ -29,6 +29,11 @@ class AccessBlockedError(FullTextProviderError):
     requires_user_action = True
 
 
+class BrowserUnavailableError(FullTextProviderError):
+    code = "browser_unavailable"
+    requires_user_action = True
+
+
 class AccessDeniedError(FullTextProviderError):
     code = "access_denied"
 

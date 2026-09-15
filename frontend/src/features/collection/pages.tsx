@@ -87,7 +87,7 @@ function FullTextTaskSummary({
   return (
     <div className={`alert mt-4 ${task.failed_count || waitingItem ? 'alert--warning' : ''}`}>
       <div className="actions justify-between">
-        <strong>全文任务：{fullTextStatusLabel(task.status)}</strong>
+        <strong>全文任务</strong>
         <Badge tone={statusTone(task.status)}>{fullTextStatusLabel(task.status)}</Badge>
       </div>
       <p className="muted mt-2">

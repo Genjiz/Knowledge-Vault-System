@@ -6,7 +6,7 @@
 
 - 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router + TanStack Query + React Hook Form + Zod + Axios + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
-- 采集与 AI：requests + beautifulsoup4 + DrissionPage + PyMuPDF4LLM + Docling + google-genai + openai
+- 采集与 AI：requests + beautifulsoup4 + DrissionPage + pywinauto + PyMuPDF4LLM + Docling + google-genai + openai
 - 桌面启动器：pystray + Pillow（根目录 `desktop.py`，仅 Windows 使用）
 - 后端环境：仓库根目录 `.venv`（Python 3.11+）；前端使用 Node.js `^20.19.0` 或 `>=22.12.0`，依赖经 npm 安装
 
@@ -21,7 +21,7 @@
 | `app/core/` | 平台层：跨包公共设施 | extensions（db/cors/migrate）、paths（数据目录唯一权威）、ports（端口分配唯一实现）、response、errors、health、tasks、llm/（模型档案、密钥存储、Gemini/OpenAI 适配器与 API） |
 | `app/papers/` | 统一论文实体与文献工作台 | models（Literature/Tag/Folder/Note/Journal/JournalSourceConfig）、repositories、routes（/api/literatures /tags /folders /notes /backup）、services（统一文献业务） |
 | `app/analysis/` | 论文分析独立业务域 | models（PaperAnalysis/PaperAnalysisItem/LiteratureTextAsset）、routes（/api/paper-analyses）、services（选择展开、Prompt 组装、全文解析缓存、分批分析） |
-| `app/collection/` | 期刊采集管道 | models（CrawlTask/RawIssue/RawPaper/LiteratureSource/FullTextTask 等）、repositories、services（ingestion/translation/analysis/artifact/task/**source_runner**/**raw_issue**/**fulltext**）、routes（/api/crawl-tasks /raw-issues /fulltext-tasks /journals /collection）、sources（题录 SourceAdapter 注册表）、fulltext（Magtech/ScienceDirect 全文提供器解析与错误分类）、providers（兼容旧期号流程的 LLM 适配）、pipeline（paper_merge 多来源关联与字段物化）、runtime（浏览器/legacy 路径）、legacy（历史脚本隔离区） |
+| `app/collection/` | 期刊采集管道 | models（CrawlTask/RawIssue/RawPaper/LiteratureSource/FullTextTask 等）、repositories、services（ingestion/translation/analysis/artifact/task/**source_runner**/**raw_issue**/**fulltext**）、routes（/api/crawl-tasks /raw-issues /fulltext-tasks /journals /collection）、sources（题录 SourceAdapter 注册表）、fulltext（Magtech/ScienceDirect 全文提供器解析与错误分类）、providers（兼容旧期号流程的 LLM 适配）、pipeline（paper_merge 多来源关联与字段物化）、runtime（普通 Edge 桌面自动化、受控 Chromium 与 legacy 路径）、legacy（历史脚本隔离区） |
 | `app/video_notes/` | 视频转笔记（独立功能） | models / repositories / services / routes / runtime |
 
 依赖方向：`collection → papers → core`，`analysis → papers/core`，`video_notes → core`。
@@ -72,7 +72,7 @@
 | POST | `/api/raw-issues/<id>/refresh` | 按年份重新查询 Scopus，并只覆盖目标卷期；空结果保留原数据 |
 | POST | `/api/literatures/<id>/fulltext-tasks` | 按文献来源解析 Magtech 或 ScienceDirect 全文；`replace_existing=true` 只替换同一自动来源 PDF |
 | POST | `/api/raw-issues/<id>/fulltext-tasks` | 为 Magtech 或可解析 PII 的 Scopus 卷期批量补采缺失全文 |
-| POST | `/api/fulltext-tasks/<id>/resume` | 在完成验证或切换网络后继续 `waiting_user` 任务 |
+| POST | `/api/fulltext-tasks/<id>/resume` | 在完成人工验证或恢复浏览器、桌面、网络环境后继续 `waiting_user` 任务 |
 | GET | `/api/fulltext-tasks[/<id>]` | 查询全文任务总览和逐篇结果，可按文献或期号过滤 |
 
 系统不再内置或自动导入期刊清单；新数据库的期刊为空，由「期刊与采集源」页面维护。期刊区域是用户维护的显式字段，采集源按区域与期刊匹配，配置接口会拒绝区域不符的源。
@@ -93,11 +93,17 @@ Scopus 源按 `ISSN(<journal.issn>) AND PUBYEAR = <year>` 使用 COMPLETE 视图
 
 Magtech 官网源走纯 HTTP 结构化导出（同类站点可复用 `base_url` 配置接入）：年页 `showTenYearVolumnDetail.do?nian={year}` → 期页 `volumn_{id}.shtml` → 文章 id → `getTxtFile.do?fileType=BibTeX`（题录/关键词/DOI）与 `fileType=EndNote`（摘要），每篇 2 个请求，无需浏览器。论文外部页按文章 id 固定生成 `/CN/abstract/abstract{id}.shtml`，不采用 BibTeX 中可能落入软 404 的 `/CN/abstract/article_{id}.shtml`；迁移同时规范化已有原始论文和统一文献 URL。标题中的 `bold` / `italic` / `sup` / `sub` 仅在标签严格成对且正确嵌套时清除；未配对、错误嵌套或未知标签保留原文并记录 warning。全文使用稳定 article_id 请求 `downloadArticleFile.do?attachType=PDF&id=<article_id>`；响应需以 `%PDF-` 开头且不超过 100 MB，验证后通过同目录临时文件原子替换。已实测情报学报官网 PDF 接口返回有效 `%PDF-1.4` 文件。
 
-全文采集与题录合并相互独立：采集台可勾选题录完成后补采 Magtech 全文，文献详情与期号详情还可按已有来源补采；PDF 失败不回滚题录。全文提供器与题录源分离：Magtech 原始记录按 article_id 下载，Scopus 原始记录存在 PII 时解析为 ScienceDirect。批量任务跳过已有 PDF；用户上传 PDF 永不被自动覆盖；单篇重新获取只替换同一自动来源 PDF。同一期号删除或重采时保留已下载 PDF，只把失效的 raw_paper 引用置空。
+全文采集与题录合并相互独立：采集台可勾选题录完成后补采 Magtech 全文，文献详情与期号详情还可按已有来源补采；PDF 失败不回滚题录。全文提供器与题录源分离：Magtech 原始记录按 article_id 下载，Scopus 原始记录存在 PII 时解析为 ScienceDirect。Scopus 返回的紧凑 PII 和 `S0306-4573(25)00349-8` 形式的带符号 PII 均可识别；原始采集值保持不变，进入 ScienceDirect 提供器前严格规范化为 17 位紧凑 PII。批量任务跳过已有 PDF；用户上传 PDF 永不被自动覆盖；单篇重新获取只替换同一自动来源 PDF。同一期号删除或重采时保留已下载 PDF，只把失效的 raw_paper 引用置空。
 
-ScienceDirect 提供器使用 PII 构造文章页与 PDF 候选地址，串行任务在每篇下载后继续；响应必须通过 `%PDF-` 文件头和 100 MB 上限校验。人机 challenge 会打开持久 profile 的可见 Chromium 页面，并把任务暂停为 `waiting_user`，用户手动处理后通过恢复接口继续；程序不求解验证码。Cloudflare `CPE00001`、429 等出口限制归类为 `access_blocked`，不打开验证码页面并立即暂停整批；订阅不足归类为 `access_denied`，按单篇失败处理。Cookie、IP、challenge 正文和 reference number 不入库。
+ScienceDirect 提供器使用 PII 构造公开文章页，并通过 `runtime/edge_desktop.py` 控制用户日常 Edge `Default` profile：等待可见 `View PDF`，用系统级鼠标输入点击，确认新标签页为目标 PII 的 `pdf.sciencedirectassets.com` 签名 PDF，再通过 `Ctrl+S` 和系统“另存为”控件把唯一临时文件保存到上传目录。临时文件必须同时通过 `%PDF-` 文件头、末尾 `%%EOF`、稳定大小和 100 MB 上限校验，读取后立即删除，再由全文服务原子写入正式 PDF。签名 URL、Cookie、IP、challenge 正文和 reference number 均不入库，只保存稳定文章 URL。
 
-当前正式 IP&M `Vol.64 No.1` 已验证从页面发起 ScienceDirect 任务后只请求首篇并正确暂停为 `access_blocked`，没有落盘文件或写入文献 PDF。受控 Edge 已完成可见启动、机构登录、文章页打开、会话内存读取和重连验证，文章页可见 `View PDF`；但 PDF 资产域进入持续 Turnstile，同一动态链接的 HTTP 请求仍返回 `403 / CPE00001`。系统不规避该 challenge，需切换到可访问的校园网/aTrust 后再验证成功下载。
+ScienceDirect 下载严格串行并由进程级锁保护；成功后只关闭当前 PDF 与文章标签页。桌面必须处于解锁的交互式 Windows 会话，Edge 必须可见且未最小化，执行期间会短暂占用前台焦点和鼠标。明确的人机 challenge 会保留当前文章页并把任务暂停为 `waiting_user`，用户手动处理后通过恢复接口继续；程序不求解验证码。普通 Edge 缺失、启动失败或后端无法连接交互式桌面时归类为可恢复的 `browser_unavailable`，同样暂停任务而不是记为终态失败。连续 `Internal Server Error` 或网络出口拒绝归类为 `access_blocked`，订阅不足归类为 `access_denied`。
+
+全文 API 仍通过 `TaskExecutor` daemon 线程执行；普通 Edge 网关在每个任务线程内显式初始化并释放 COM apartment，避免 pywinauto 首次导入线程与后续任务线程不一致导致 UIA 失效。
+
+校园网下已用普通 Edge 对 IP&M PII `S0306457326004826` 完成网关和临时数据库任务两层 smoke test：任务状态与条目状态均为 `completed`，PDF 为 21 页，文件哈希与 `literature`、任务条目记录一致，正式数据库未被测试写入。专用 DrissionPage profile 把 Cookie 和动态链接转入 `requests` 的旧路径仍会返回 `403 / CPE00001`，不再用于 ScienceDirect 全文下载。
+
+IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真实批量验证：首轮成功 11 篇，1 篇因 Edge 临时保存结果不是 PDF 而安全失败；再次创建期号任务时自动跳过 11 篇已有 PDF并补齐缺失论文。最终 12 个 PDF 共 247 页、45,778,403 字节，全部可解析且文件哈希与任务记录一致。
 
 「测试连接」是轻量探测，不采集论文、不落临时文件：`magtech` 请求年页解析期号并回报识别结果；`ncpssd` 校验期刊定位参数是否已缓存 + 站点探活；`elsevier` 校验期刊 slug 是否已配置 + 站点探活；`scopus` 使用 STANDARD 视图请求一条记录并校验 Key、ISSN 与连通性。仅测试结果状态会写入 `journal_source_config`。
 
@@ -123,7 +129,7 @@ ScienceDirect 提供器使用 PII 构造文章页与 PDF 候选地址，串行�
 | `/video-notes`、`/video-notes/tasks`、`/video-notes/tasks/<id>` | 视频任务创建、列表、状态、日志与产物 |
 | `/settings/models` | 模型档案、模型密钥与连接测试 |
 
-期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。issue 粒度源显示期号输入，year 粒度源只显示年份。采集期号库按期刊 → 年份 → 卷号 → 期号展示，`unknown` / `unassigned` 分别显示为“卷号未知”/“未分期”；统一文献层不保存这些内部标记。Scopus 详情可重采目标卷期，也可对存在 PII 的论文补采 ScienceDirect 全文。全文任务暂停时，期号详情与文献详情显示失败原因、公开文章页和按失败类型命名的继续操作。外文期号翻译要求选择具体模型，翻译后可用“原文 / 中文译文”分段控件切换显示。采集服务密钥在独立采集设置页维护。
+期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。issue 粒度源显示期号输入，year 粒度源只显示年份。采集期号库按期刊 → 年份 → 卷号 → 期号展示，`unknown` / `unassigned` 分别显示为“卷号未知”/“未分期”；统一文献层不保存这些内部标记。Scopus 详情可重采目标卷期，也可对存在 PII 的论文补采 ScienceDirect 全文。全文任务暂停时，期号详情与文献详情显示失败原因、公开文章页和继续操作；只有 `verification_required` 使用“验证完成后继续”，其他可恢复状态统一使用“继续下载”。外文期号翻译要求选择具体模型，翻译后可用“原文 / 中文译文”分段控件切换显示。采集服务密钥在独立采集设置页维护。
 
 ## 数据与产物
 
@@ -142,7 +148,7 @@ ScienceDirect 提供器使用 PII 构造文章页与 PDF 候选地址，串行�
 
 - 运行数据目录统一由 `app/core/paths.py` 定义（`DATA_ROOT` 环境变量可整体重定向）；各目录保留独立环境变量覆盖（`DATABASE_URL`、`ARTIFACT_ROOT`、`UPLOAD_FOLDER`）。
 - 运行时路径工具从代码位置向上查找同时包含 `backend/` 和 `frontend/` 的目录作为工作区根（`app/collection/runtime/paths.py`）
-- 浏览器 profile 目录：`.crawler-browser-profile/`（可用环境变量 `CRAWLER_BROWSER_DATA_ROOT` 覆盖）
+- 受控 Chromium profile 目录：`.crawler-browser-profile/`（可用环境变量 `CRAWLER_BROWSER_DATA_ROOT` 覆盖）；ScienceDirect 全文不使用该目录，直接复用普通 Edge `Default` profile
 - 采集历史脚本位于 `backend/app/collection/legacy/`，由 source 适配器动态加载包装
 - 浏览器可执行文件探测覆盖 Chrome、Chromium 和 Microsoft Edge 常见 x64/x86 路径，可用环境变量 `CRAWLER_BROWSER_PATH` 覆盖
 - 模型 API Key 映射位于根目录 `.env` 的 `LLM_API_KEYS_JSON`（不提交）；数据库只存非敏感模型配置。
@@ -163,6 +169,7 @@ ScienceDirect 提供器使用 PII 构造文章页与 PDF 候选地址，串行�
 - 采集任务为同步执行（请求内跑完）；如需异步化需改 API 契约并配合前端轮询（core/tasks 执行器已可用）
 - 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
 - 全文自动采集目前支持已配置的国内 Magtech 期刊官网，以及可由 Scopus PII 定位且当前机构会话有权访问的 ScienceDirect 论文；NCPSSD、其他出版社和无订阅权限的页面不支持，也不绕过访问控制
+- ScienceDirect 普通 Edge 自动化仅支持 Windows 交互式桌面；锁屏、最小化 Edge 或下载期间操作鼠标与切换焦点可能中断当前论文
 - 全文任务由进程内 daemon 线程执行，应用重启不会自动恢复未完成任务
 - 论文分析任务同样由进程内 daemon 线程执行，应用重启不会自动恢复未完成任务，可从历史记录重新分析
 - Magtech 年页 `showTenYearVolumnDetail.do` 仅覆盖近十年，更早年份的期号探测未实现

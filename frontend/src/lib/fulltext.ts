@@ -18,6 +18,6 @@ export function fullTextStatusLabel(status?: string) {
 }
 
 export function fullTextActionLabel(failureCode?: string | null) {
-  if (failureCode === 'access_blocked') return '网络切换后继续'
-  return '验证完成后继续'
+  if (failureCode === 'verification_required') return '验证完成后继续'
+  return '继续下载'
 }

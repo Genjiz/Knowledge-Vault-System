@@ -26,7 +26,7 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 
 - 前端：React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + TanStack Router / Query + ECharts
 - 后端：Flask + SQLAlchemy + SQLite
-- 采集与 AI：requests + beautifulsoup4 + DrissionPage + PyMuPDF4LLM + Docling + google-genai + openai
+- 采集与 AI：requests + beautifulsoup4 + DrissionPage + pywinauto + PyMuPDF4LLM + Docling + google-genai + openai
 
 ## 仓库结构
 
@@ -69,6 +69,8 @@ cd ..
 ```
 
 数据库结构变更统一通过 Flask-Migrate 管理（`flask db migrate` + `flask db upgrade`），不再依赖 `create_all()`。
+
+ScienceDirect 全文补采使用当前 Windows 用户的普通 Edge `Default` profile。开始任务前需在该 profile 中完成机构登录，并保持桌面解锁、Edge 可见且未最小化；自动下载期间会短暂占用前台焦点和鼠标。出现人机验证时任务会暂停，用户在同一 Edge 页面完成验证后可从界面继续。
 
 ### 3. 配置模型
 

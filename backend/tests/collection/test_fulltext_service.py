@@ -18,11 +18,13 @@ class FakePdfSource:
     def __init__(self, payload=b"%PDF-1.4\nfixture"):
         self.payload = payload
         self.calls = []
+        self.kwargs = []
 
     def download_pdf(self, paper_ref, **kwargs):
         from app.collection.sources.base import PdfDownload
 
         self.calls.append(paper_ref)
+        self.kwargs.append(kwargs)
         if isinstance(self.payload, Exception):
             raise self.payload
         return PdfDownload(
@@ -120,6 +122,11 @@ class FullTextServiceTestCase(unittest.TestCase):
         self.assertEqual(task.succeeded_count, 1)
         self.assertEqual(literature.pdf_source_type, "magtech")
         self.assertEqual(literature.pdf_source_raw_paper_id, raw_paper.id)
+        self.assertEqual(
+            Path(source.kwargs[0]["download_dir"]),
+            self.temp_dir / "uploads" / "pdfs",
+        )
+        self.assertEqual(source.kwargs[0]["max_pdf_size"], 100 * 1024 * 1024)
         self.assertEqual(literature.pdf_size_bytes, len(source.payload))
         pdf_path = self.temp_dir / literature.pdf_path
         self.assertEqual(pdf_path.read_bytes(), source.payload)
@@ -151,6 +158,35 @@ class FullTextServiceTestCase(unittest.TestCase):
         self.assertEqual(calls, [("sciencedirect", "Information Processing & Management")])
         self.assertEqual(literature.pdf_source_type, "sciencedirect")
         self.assertEqual(literature.pdf_source_raw_paper_id, raw_paper.id)
+
+    def test_issue_task_accepts_legacy_scopus_pii(self):
+        from app.collection.services.fulltext_service import FullTextService
+
+        issue, _, literature = self._seed_paper(
+            source_type="scopus",
+            source_ref={
+                "pii": "S0306-4573(25)00349-8",
+                "doi": "10.1016/j.ipm.2025.104408",
+            },
+            detail_url=(
+                "https://www.sciencedirect.com/science/article/pii/"
+                "S0306-4573(25)00349-8"
+            ),
+        )
+        source = FakePdfSource()
+        service = FullTextService(source_factory=lambda *_: source)
+
+        task = service.create_issue_task(issue.id)
+        service.run_task(task.id)
+        db.session.refresh(literature)
+
+        self.assertEqual(task.source_type, "sciencedirect")
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(
+            source.calls,
+            [{"pii": "S0306457325003498", "doi": "10.1016/j.ipm.2025.104408"}],
+        )
+        self.assertEqual(literature.pdf_source_type, "sciencedirect")
 
     def test_human_verification_pauses_and_resumes_same_task(self):
         from app.collection.fulltext.base import HumanVerificationRequired
@@ -188,6 +224,31 @@ class FullTextServiceTestCase(unittest.TestCase):
         self.assertEqual(task.items[0].status, "completed")
         self.assertIsNone(task.items[0].failure_code)
         self.assertIsNone(task.items[0].action_url)
+
+    def test_browser_unavailable_pauses_instead_of_failing_task(self):
+        from app.collection.fulltext.base import BrowserUnavailableError
+        from app.collection.services.fulltext_service import FullTextService
+
+        _, _, literature = self._seed_paper(
+            source_type="scopus",
+            source_ref={"pii": "S0306457326003201"},
+        )
+        source = FakePdfSource(
+            BrowserUnavailableError(
+                "后端进程无法访问 Windows 交互式桌面",
+                action_url="https://www.sciencedirect.com/science/article/pii/S0306457326003201",
+            )
+        )
+        service = FullTextService(source_factory=lambda *_: source)
+        task = service.create_single_task(literature.id)
+
+        service.run_task(task.id)
+        db.session.refresh(task)
+
+        self.assertEqual(task.status, "waiting_user")
+        self.assertEqual(task.items[0].status, "waiting_user")
+        self.assertEqual(task.items[0].failure_code, "browser_unavailable")
+        self.assertIsNone(task.finished_at)
 
     def test_issue_task_skips_existing_user_pdf_and_downloads_missing_pdf(self):
         from app.collection.models import LiteratureSource, RawPaper

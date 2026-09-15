@@ -214,6 +214,6 @@
 
 - 状态：已生效
 - 日期：2026-09-15
-- 内容：外文 PDF 首期只支持 ScienceDirect。Scopus 继续作为题录来源，独立全文提供器按 raw_paper 的 PII 解析 ScienceDirect，不把所有 Scopus 论文视为 Elsevier 全文。人机 challenge 或网络出口限制会暂停整批任务为 `waiting_user`，保存稳定失败码和公开文章 URL，用户处理后从当前条目恢复；程序不求解验证码、不绕过登录、订阅或访问控制。Cloudflare `CPE00001` 与交互式 challenge 分开分类。
+- 内容：外文 PDF 首期只支持 ScienceDirect。Scopus 继续作为题录来源，独立全文提供器按 raw_paper 的 PII 解析 ScienceDirect，不把所有 Scopus 论文视为 Elsevier 全文。ScienceDirect 复用用户日常 Edge `Default` profile，通过 Windows UI Automation 定位控件并发送系统级键鼠输入，不使用独立自动化 profile，也不把浏览器 Cookie 或签名链接转入 HTTP 客户端。人机 challenge、网络出口限制或普通 Edge 桌面暂时不可用会暂停整批任务为 `waiting_user`，保存稳定失败码和公开文章 URL，用户处理后从当前条目恢复；程序不求解验证码、不绕过登录、订阅或访问控制。
 - 理由：同一题录库覆盖多个出版社，题录来源不能决定全文站点；网页下载的登录态、风控和订阅失败具有不同恢复动作，普通异常重试会扩大封禁风险并丢失任务进度。
-- 影响：新增 `collection/fulltext` 提供器层、受控 Chromium 会话、`failure_code` / `action_url`、`waiting_user` 状态和全文任务恢复 API；Magtech 使用同一任务编排，现有 PDF 覆盖保护保持不变。
+- 影响：`collection/fulltext` 提供器层使用普通 Edge 桌面网关完成 ScienceDirect 下载，要求 Windows 桌面已解锁且 Edge 可见，并在串行任务期间短暂占用前台焦点和鼠标；`failure_code` / `action_url`、`waiting_user` 状态和全文任务恢复 API 保持不变。Magtech 使用同一任务编排，现有 PDF 覆盖保护保持不变。
