@@ -28,7 +28,7 @@
 
 蓝图前缀：`/api/literatures`、`/api/paper-analyses`、`/api/llm`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/fulltext-tasks`、`/api/journals`、`/api/collection`、`/api/health`。
 
-数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `a8d4e6f1b203`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照、增加全文任务人工处理状态，以及删除已剥离的视频任务表。
+数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `b3f9c2a7d401`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照、增加全文任务人工处理状态、删除已剥离的视频任务表，以及统一 `tag.name` 唯一约束名称。
 
 ## 数据模型
 
