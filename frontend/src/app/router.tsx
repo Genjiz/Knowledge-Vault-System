@@ -18,9 +18,6 @@ import {
   RawIssueListPage,
   StatisticsPage,
   TagPage,
-  VideoNoteDetailPage,
-  VideoNoteHomePage,
-  VideoNoteListPage,
 } from './route-components'
 
 const rootRoute = createRootRoute({ component: AppShell })
@@ -43,9 +40,6 @@ const routes = [
   route('/crawler/issues', RawIssueListPage),
   route('/crawler/issues/$id', RawIssueDetailPage),
   route('/crawler/settings', CollectionSettingsPage),
-  route('/video-notes', VideoNoteHomePage),
-  route('/video-notes/tasks', VideoNoteListPage),
-  route('/video-notes/tasks/$id', VideoNoteDetailPage),
   route('/settings/models', ModelSettingsPage),
 ]
 const routeTree = rootRoute.addChildren(routes)

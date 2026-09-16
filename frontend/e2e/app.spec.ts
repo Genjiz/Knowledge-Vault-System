@@ -63,21 +63,6 @@ const sampleScopusIssue = {
   translation_model_name: 'gemini-test',
 }
 
-const sampleVideoTask = {
-  id: 1,
-  source_url: 'https://www.bilibili.com/video/BV1TEST',
-  bvid: 'BV1TEST',
-  video_title: '视频任务验证',
-  status: 'completed',
-  current_step: 'done',
-  progress_message: '处理完成',
-  updated_at: '2026-09-05T08:30:00Z',
-  transcript_content: '1\n00:00:00,000 --> 00:00:02,000\n测试字幕',
-  note_content: '# 测试笔记\n\n迁移验证完成。',
-  transcript_path: 'backend/data/artifacts/video/1/transcript.srt',
-  note_path: 'backend/data/artifacts/video/1/note.md',
-}
-
 interface MockModelProfile {
   id: number
   name: string
@@ -351,14 +336,6 @@ async function installApiMocks(page: Page) {
       data = { items: analyses, total: analyses.length, page: 1, per_page: 20 }
     } else if (/^\/api\/paper-analyses\/\d+$/.test(path)) {
       data = analyses.find((item) => item.id === Number(path.split('/').pop())) || null
-    } else if (path === '/api/video-note-tasks' && method === 'POST') {
-      data = { ...sampleVideoTask, profile_id: 1, model_name: 'gemini-test' }
-    } else if (path === '/api/video-note-tasks') {
-      data = [sampleVideoTask]
-    } else if (path === '/api/video-note-tasks/1/logs') {
-      data = [{ id: 1, level: 'info', message: '任务完成', created_at: '2026-09-05T08:30:00Z' }]
-    } else if (path === '/api/video-note-tasks/1') {
-      data = sampleVideoTask
     } else {
       data = null
     }
@@ -396,9 +373,6 @@ const routes = [
   ['/crawler/issues', '采集期号库'],
   ['/crawler/issues/1', '情报学报'],
   ['/crawler/settings', '采集设置'],
-  ['/video-notes', '视频转笔记'],
-  ['/video-notes/tasks', '视频任务列表'],
-  ['/video-notes/tasks/1', '视频任务验证'],
   ['/settings/models', '模型配置'],
 ] as const
 
@@ -415,6 +389,16 @@ test('全部路由都能渲染且没有浏览器错误', async ({ page }) => {
   }
 
   expect(errors).toEqual([])
+})
+
+test('视频模块入口和旧路由均不再提供', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText('Media', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '视频转笔记' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '视频任务列表' })).toHaveCount(0)
+
+  await page.goto('/video-notes')
+  await expect(page.getByRole('heading', { name: '视频转笔记' })).toHaveCount(0)
 })
 
 test('文献导航、筛选和详情跳转保持可用', async ({ page }) => {
@@ -587,21 +571,6 @@ test('外文期号显式选择翻译模型并用分段控件切换译文', async
   )
   await page.getByRole('button', { name: '重新翻译本期' }).click()
   expect((await requestPromise).postDataJSON()).toEqual({ profile_id: 1 })
-})
-
-test('视频笔记在创建任务时提交具体模型', async ({ page }) => {
-  await page.goto('/video-notes')
-  await page.getByLabel('B 站视频链接').fill('https://www.bilibili.com/video/BV1TEST')
-  await expect(page.getByRole('button', { name: '创建任务' })).toBeDisabled()
-  await page.getByLabel('笔记生成模型').selectOption('1')
-  const requestPromise = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname === '/api/video-note-tasks' && request.method() === 'POST',
-  )
-
-  await page.getByRole('button', { name: '创建任务' }).click()
-
-  expect((await requestPromise).postDataJSON()).toMatchObject({ profile_id: 1 })
 })
 
 test('期刊页不再暴露内置清单，期号详情提供独立分析入口', async ({ page }) => {

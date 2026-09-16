@@ -48,6 +48,7 @@
 │  ├─ lessons/
 │  ├─ plans/
 │  └─ proxy-and-network.md
+├─ video-notes-extracted/  # 已剥离、非运行态的视频模块代码
 ├─ desktop.py
 ├─ desktop.bat
 ├─ README.md
@@ -57,4 +58,5 @@
 ## 说明
 
 - 仓库根目录就是项目根目录
+- `video-notes-extracted/` 不参与当前项目运行，供后续整体移出仓库
 - 如果历史计划中出现旧目录结构或旧文档名，以本文件和 `AGENTS.md` 为准

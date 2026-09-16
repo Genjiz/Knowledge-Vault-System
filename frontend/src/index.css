@@ -1259,12 +1259,6 @@ a {
   font-size: 13px;
   line-height: 1.7;
 }
-.video-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 260px;
-}
 .min-w-0 {
   min-width: 0;
 }
@@ -1338,9 +1332,6 @@ a {
   color: #45566f;
   font-size: 13px;
   line-height: 1.6;
-}
-.video-transcript {
-  min-height: 220px;
 }
 .note-preview {
   min-height: 360px;

@@ -32,7 +32,6 @@ def create_app(config_name=None):
     from app.analysis.models import LiteratureTextAsset, PaperAnalysis, PaperAnalysisItem
     from app.core.llm.models import LLMProfile
     from app.collection.models import CrawlTask, CrawlTaskLog, FullTextTask, FullTextTaskItem, LiteratureSource, LLMRun, RawIssue, RawIssueAnalysis, RawPaper
-    from app.video_notes.models import VideoNoteTask, VideoNoteTaskLog
     
     @app.route('/uploads/pdfs/<path:filename>')
     def serve_upload(filename):

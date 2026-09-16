@@ -28,7 +28,6 @@ class CorePathsTestCase(unittest.TestCase):
         self.assertEqual(paths.upload_folder(), BACKEND_DIR / "data" / "uploads" / "pdfs")
         self.assertEqual(paths.artifacts_root(), BACKEND_DIR / "data" / "artifacts")
         self.assertEqual(paths.crawler_artifacts_root(), BACKEND_DIR / "data" / "artifacts" / "crawler")
-        self.assertEqual(paths.video_notes_artifacts_root(), BACKEND_DIR / "data" / "artifacts" / "video-notes")
 
     def test_data_root_env_override_applies_to_all_paths(self):
         from app.core import paths
@@ -40,7 +39,6 @@ class CorePathsTestCase(unittest.TestCase):
         self.assertEqual(paths.upload_folder(), Path("C:/demo-data/uploads/pdfs"))
         self.assertEqual(paths.artifacts_root(), Path("C:/demo-data/artifacts"))
         self.assertEqual(paths.crawler_artifacts_root(), Path("C:/demo-data/artifacts/crawler"))
-        self.assertEqual(paths.video_notes_artifacts_root(), Path("C:/demo-data/artifacts/video-notes"))
 
     def test_database_uri_uses_sqlite_prefix(self):
         from app.core import paths
@@ -48,14 +46,6 @@ class CorePathsTestCase(unittest.TestCase):
         os.environ["DATA_ROOT"] = "C:/demo-data"
 
         self.assertEqual(paths.database_uri(), "sqlite:///C:/demo-data/db/app.db")
-
-    def test_video_note_task_root_contains_task_id(self):
-        from app.core import paths
-
-        os.environ["DATA_ROOT"] = "C:/demo-data"
-
-        self.assertEqual(paths.video_note_task_root(12), Path("C:/demo-data/artifacts/video-notes/12"))
-
 
 if __name__ == "__main__":
     unittest.main()

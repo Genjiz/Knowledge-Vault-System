@@ -9,8 +9,7 @@ Knowledge Vault 是一个正在持续演进的个人知识库项目。它最初�
 - 文献管理：文献条目、标签、文件夹、笔记、统计、备份
 - 采集中心：按期刊配置采集源（国家哲社文献中心 / 期刊官网 / Scopus API / Elsevier）、按期或按年查询题录并按真实卷期入库、Magtech 与授权 ScienceDirect 全文 PDF 补采、人工验证后续跑、翻译、JSON/Markdown 导出
 - 论文分析：整期或从整个文献库检索自选论文创建异步综合分析，支持默认 Prompt 查看、自定义要求、可选 PDF 全文、运行历史与显式模型选择
-- 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型；论文分析、论文翻译和视频笔记在任务入口选择具体模型
-- 视频转笔记：输入 B 站链接，自动执行音频下载、Whisper 转写和模型笔记生成
+- 模型平台：页面维护 Gemini Native / OpenAI Compatible 模型；论文分析和论文翻译在任务入口选择具体模型
 - 单一主项目结构：前后端与采集能力已统一到同一个仓库中维护
 
 ## 项目方向
@@ -35,6 +34,7 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 ├─ backend/
 ├─ frontend/
 ├─ docs/
+├─ video-notes-extracted/  # 已剥离、非运行态的视频模块代码
 ├─ desktop.py
 ├─ desktop.bat
 ├─ README.md
@@ -149,17 +149,7 @@ npm run format:check
 - 文献管理：侧边栏 `Workspace`
 - 论文分析：侧边栏 `Analysis → 论文分析`
 - 采集中心：侧边栏 `Collection`
-- 视频转笔记：侧边栏 `Media`
 - 模型配置：侧边栏 `System`
-
-视频转笔记模块除以上环境外，还需要本机具备：`yt-dlp`、FFmpeg、名为 `whisper` 的 conda 环境（内装 `faster-whisper`），并在创建任务时选择已配置 API Key 的模型。使用 Gemini 且本机无法直连时，还需在 `.env` 配置代理。该模块计划改为项目内部依赖，调整前会先确认方案。
-
-视频转笔记模块的任务产物会保存到：
-
-- `backend/data/artifacts/video-notes/<task_id>/source/`
-- `backend/data/artifacts/video-notes/<task_id>/transcript/`
-- `backend/data/artifacts/video-notes/<task_id>/notes/`
-- `backend/data/artifacts/video-notes/<task_id>/metadata.json`
 
 ## 文档入口
 

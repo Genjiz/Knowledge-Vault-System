@@ -30,6 +30,13 @@ class AppBootstrapTestCase(unittest.TestCase):
         self.assertIn("crawl_task", table_names)
         self.assertIn("raw_issue", table_names)
 
+    def test_factory_does_not_register_video_note_routes(self):
+        app = create_app("testing")
+
+        response = app.test_client().get("/api/video-note-tasks")
+
+        self.assertEqual(response.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

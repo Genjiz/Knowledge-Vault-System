@@ -10,7 +10,6 @@
 - 仓库托管于 GitHub 私有仓库；运行数据随仓库提交，已安装依赖目录通过锁文件与 `setup.ps1` 跨机器重建
 - Gemini Key 读取优先级：环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → 根目录 `gemini_api_key.txt`
 - 本机浏览器为 Edge（Chromium 内核）；DrissionPage 默认按 Chrome 路径查找浏览器，需要指定浏览器路径时先与用户确认
-- 视频转笔记模块依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg）；该模块计划改为项目内部依赖，调整前先与用户确认方案
 
 ## 1. 协作与确认约定（强制）
 
@@ -55,7 +54,7 @@
 
 - 顶层目录保持聚焦：`backend/`、`frontend/`、`docs/`，以及少量根目录项目文件。
 - 仓库根目录是唯一项目根目录，不得引入嵌套子项目根目录。
-- 后端遵循分层结构：`models`、`repositories`、`services`、`providers`、`routes`、`runtime`；独立业务域按域分包（现有 `crawler`、`video_notes`），跨域公共设施放 `app/core/`。
+- 后端遵循分层结构：`models`、`repositories`、`services`、`providers`、`routes`、`runtime`；独立业务域按域分包（现有 `papers`、`analysis`、`collection`），跨域公共设施放 `app/core/`。
 - 新功能集成到现有应用架构中，不引入独立 standalone 应用或脚本入口。
 - `crawler/legacy/` 是历史爬虫脚本的隔离区，通过 provider 包装逐步吸收，不得在其中新增正式功能。
 

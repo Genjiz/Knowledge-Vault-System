@@ -4,7 +4,7 @@
 
 ## 四类网络机制
 
-1. **标准代理环境变量**：`HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY`。Requests、HTTPX、curl、yt-dlp 等支持这些变量的客户端可以读取它们。
+1. **标准代理环境变量**：`HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY`。Requests、HTTPX、curl 等支持这些变量的客户端可以读取它们。
 2. **Windows 系统代理**：Windows 设置中的手动代理或自动配置脚本（PAC/WPAD）。Edge/Chromium 通常跟随该设置；Requests 在 Windows 上也可能通过 Python 的系统代理发现机制读取它，HTTPX 主要读取标准代理环境变量。
 3. **显式客户端代理**：代码把代理 URL 直接传给某个 SDK 或 HTTP 客户端。此时代理来源唯一，不依赖客户端自动发现。
 4. **网卡、TUN 或机构隧道**：Veee/Clash 的 TUN 模式、aTrust 等在更低网络层改变路由或出口。应用即使使用 `trust_env=False`，其“直连”流量仍会经过操作系统当前路由；`trust_env=False` 只是不读取应用层代理配置，不能绕过 TUN 或 aTrust。
@@ -46,8 +46,6 @@ Requests 的 `Session.trust_env` 和 HTTPX 的同名选项控制客户端是否�
 | Magtech 题录、摘要与 PDF | Requests Session | 默认 Session 使用 `trust_env=False`，应用层强制直连 |
 | Elsevier legacy 连接预检 | 模块级 Requests | 使用 Requests 默认自动代理行为 |
 | Elsevier/ScienceDirect 浏览器采集与全文 | Edge/Chromium | Python 不设置浏览器代理，由 Windows、浏览器设置、扩展及 TUN/aTrust 决定 |
-| B 站音频下载 | `yt-dlp` 子进程 | 继承后端进程环境；`yt-dlp` 按自身规则读取标准代理变量 |
-| Whisper 模型下载/转写 | conda 子进程 | 继承后端进程环境；具体下载库按自身规则读取标准代理变量，本地转写本身不出网 |
 | 桌面启动器健康检查 | `urllib.request` | 显式使用空 `ProxyHandler`，确保 `localhost` / `127.0.0.1` 探测不经过应用层代理 |
 
 `NO_PROXY` 只对会读取它的客户端生效。桌面健康检查仍保留空 `ProxyHandler`，因为启动器必须在 `.env` 尚未加载、父进程变量不规范或系统代理配置异常时也可靠检查本机服务。
@@ -67,7 +65,7 @@ Requests 的 `Session.trust_env` 和 HTTPX 的同名选项控制客户端是否�
 
 ### 仅使用 Veee 本地 HTTP 代理
 
-在 `.env` 填写 Veee 实际 HTTP 端口。Gemini、OpenAI Compatible、yt-dlp 等可使用标准变量；Scopus、NCPSSD、Magtech 仍使用应用层直连。若 Veee 同时开启全局 TUN，后者是否最终经过 Veee 仍取决于 Veee 的路由规则，代码无法绕过 TUN。
+在 `.env` 填写 Veee 实际 HTTP 端口。Gemini、OpenAI Compatible 等可使用标准变量；Scopus、NCPSSD、Magtech 仍使用应用层直连。若 Veee 同时开启全局 TUN，后者是否最终经过 Veee 仍取决于 Veee 的路由规则，代码无法绕过 TUN。
 
 ### 校园网内
 

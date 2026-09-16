@@ -42,11 +42,3 @@ def literature_text_assets_root() -> Path:
 
 def crawler_artifacts_root() -> Path:
     return artifacts_root() / "crawler"
-
-
-def video_notes_artifacts_root() -> Path:
-    return artifacts_root() / "video-notes"
-
-
-def video_note_task_root(task_id) -> Path:
-    return video_notes_artifacts_root() / str(task_id)

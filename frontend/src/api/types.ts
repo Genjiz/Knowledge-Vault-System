@@ -285,29 +285,3 @@ export interface PaperAnalysisPage {
   items: PaperAnalysis[]
   total: number
 }
-export interface VideoTask {
-  id: number
-  source_url: string
-  bvid?: string
-  video_title?: string
-  status: string
-  profile_id?: number | null
-  profile_name?: string | null
-  model_name?: string | null
-  current_step?: string
-  progress_message?: string
-  error_message?: string
-  updated_at?: string
-  audio_path?: string
-  transcript_path?: string
-  note_path?: string
-  metadata_path?: string
-  transcript_content?: string
-  note_content?: string
-}
-export interface VideoLog {
-  id: number
-  level?: string
-  message: string
-  created_at?: string
-}

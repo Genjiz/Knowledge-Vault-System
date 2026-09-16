@@ -11,7 +11,6 @@ from app.core.llm.secrets import EnvSecretStore
 SCENES = {
     "paper_analysis": "论文分析",
     "paper_translation": "论文翻译",
-    "video_note": "视频笔记",
 }
 
 @dataclass(frozen=True)

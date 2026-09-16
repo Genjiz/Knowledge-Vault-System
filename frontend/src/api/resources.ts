@@ -21,8 +21,6 @@ import type {
   SourceTestResult,
   Statistics,
   TagRecord,
-  VideoLog,
-  VideoTask,
 } from './types'
 
 const data = async <T>(request: Promise<{ data: unknown }>) => (await request).data as T
@@ -139,10 +137,4 @@ export const paperAnalysisApi = {
   rerun: (id: number, profileId?: number) =>
     data<PaperAnalysis>(api.post(`/paper-analyses/${id}/rerun`, { profile_id: profileId })),
   remove: (id: number) => data(api.delete(`/paper-analyses/${id}`)),
-}
-export const videoApi = {
-  list: () => data<VideoTask[]>(api.get('/video-note-tasks')),
-  get: (id: string | number) => data<VideoTask>(api.get(`/video-note-tasks/${id}`)),
-  logs: (id: string | number) => data<VideoLog[]>(api.get(`/video-note-tasks/${id}/logs`)),
-  create: (p: object) => data<VideoTask>(api.post('/video-note-tasks', p)),
 }

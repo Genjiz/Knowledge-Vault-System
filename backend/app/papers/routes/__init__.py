@@ -7,7 +7,6 @@ from app.papers.routes.tag import tag_bp
 from app.papers.routes.folder import folder_bp
 from app.papers.routes.note import note_bp
 from app.papers.routes.backup import backup_bp
-from app.video_notes.routes import video_note_task_bp
 from app.core.llm.routes import llm_bp
 from app.analysis.routes import paper_analysis_bp
 
@@ -19,7 +18,6 @@ def register_routes(app: Flask):
     app.register_blueprint(raw_issue_bp)
     app.register_blueprint(sources_bp)
     app.register_blueprint(journal_bp)
-    app.register_blueprint(video_note_task_bp)
     app.register_blueprint(literature_bp)
     app.register_blueprint(tag_bp)
     app.register_blueprint(folder_bp)

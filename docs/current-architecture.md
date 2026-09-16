@@ -23,13 +23,12 @@
 | `app/papers/` | 统一论文实体与文献工作台 | models（Literature/Tag/Folder/Note/Journal/JournalSourceConfig）、repositories、routes（/api/literatures /tags /folders /notes /backup）、services（统一文献业务） |
 | `app/analysis/` | 论文分析独立业务域 | models（PaperAnalysis/PaperAnalysisItem/LiteratureTextAsset）、routes（/api/paper-analyses）、services（选择展开、Prompt 组装、全文解析缓存、分批分析） |
 | `app/collection/` | 期刊采集管道 | models（CrawlTask/RawIssue/RawPaper/LiteratureSource/FullTextTask 等）、repositories、services（ingestion/translation/analysis/artifact/task/**source_runner**/**raw_issue**/**fulltext**）、routes（/api/crawl-tasks /raw-issues /fulltext-tasks /journals /collection）、sources（题录 SourceAdapter 注册表）、fulltext（Magtech/ScienceDirect 全文提供器解析与错误分类）、providers（兼容旧期号流程的 LLM 适配）、pipeline（paper_merge 多来源关联与字段物化）、runtime（普通 Edge 桌面自动化、受控 Chromium 与 legacy 路径）、legacy（历史脚本隔离区） |
-| `app/video_notes/` | 视频转笔记（独立功能） | models / repositories / services / routes / runtime |
 
-依赖方向：`collection → papers → core`，`analysis → papers/core`，`video_notes → core`。
+依赖方向：`collection → papers → core`，`analysis → papers/core`。
 
-蓝图前缀：`/api/literatures`、`/api/paper-analyses`、`/api/llm`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/fulltext-tasks`、`/api/journals`、`/api/collection`、`/api/video-note-tasks`、`/api/health`。
+蓝图前缀：`/api/literatures`、`/api/paper-analyses`、`/api/llm`、`/api/tags`、`/api/folders`、`/api/notes`、`/api/backup`、`/api/crawl-tasks`、`/api/raw-issues`、`/api/fulltext-tasks`、`/api/journals`、`/api/collection`、`/api/health`。
 
-数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `f6b8c1d3e742`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照，以及增加全文任务人工处理状态。
+数据库结构由 Flask-Migrate（Alembic）管理，迁移脚本位于 `backend/migrations/`；`db.create_all()` 已从 app factory 移除（测试环境仍使用 create_all 建内存库）。当前迁移头为 `a8d4e6f1b203`；其最近迁移依次增加论文级卷期、拆分 Scopus 年度批次、增加分析全文资产与 Prompt 配置、增加 Prompt 模板快照、移除场景模型绑定并增加任务模型快照、增加全文任务人工处理状态，以及删除已剥离的视频任务表。
 
 ## 数据模型
 
@@ -38,7 +37,7 @@
 - 采集原始记录：`raw_issue`（以 source_type + journal + year + volume + issue 唯一标识；缺卷号为 `unknown`，缺期号为 `unassigned`；`expected_paper_count` 保存来源报告的应有篇数，API 实时返回题名、摘要和全文完成数）、`raw_paper`（保留为审计/重跑层，含 doi、论文级 volume / issue 与 `source_ref_json` 稳定源引用，入库时向 `literature` upsert 合并）
 - 多来源关联：`literature_source`（一条 raw_paper 只关联一条 literature，一条 literature 可关联多个来源；删除 raw_paper 时级联删除关联）
 - 采集核心表：`crawl_task`（source_type + region）、`crawl_task_log`、`raw_issue_analysis`、`llm_run`
-- 模型平台：`llm_profile` 保存协议、Base URL、模型名、启用状态和测试结果。用户发起论文分析、论文翻译或视频笔记时必须提交具体模型档案；场景名称仅用于 Prompt 和调用类型分类，不绑定默认模型。API Key 不入库。
+- 模型平台：`llm_profile` 保存协议、Base URL、模型名、启用状态和测试结果。用户发起论文分析或论文翻译时必须提交具体模型档案；场景名称仅用于 Prompt 和调用类型分类，不绑定默认模型。API Key 不入库。
 - 论文分析：`paper_analysis` 保存异步任务、模型、Prompt 模板版本与快照、自定义要求、全文使用/失败数和 Markdown 结果；`paper_analysis_item` 保存每篇统一文献的题录输入快照及所用全文资产引用。
 - 全文文本资产：`literature_text_asset` 按 PDF SHA-256 + 解析管道版本唯一复用，记录实际解析器名称/版本、Markdown SHA-256、字符数、状态与失败尝试。
 - 全文任务：`fulltext_task` 记录 single / issue / after_ingestion 任务总览；`fulltext_task_item` 记录逐篇来源、成功/失败/跳过/等待用户状态、稳定失败码、待处理公开 URL 及下载结果
@@ -110,11 +109,11 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 
 ## 前端结构与页面
 
-入口为 `frontend/src/main.tsx`，应用壳与路由位于 `src/app/`。`AppShell` 提供 Workspace / Analysis / Collection / Media / System / Utilities 六组导航；TanStack Router 按业务域懒加载页面；TanStack Query 管理服务端数据与后台任务轮询。
+入口为 `frontend/src/main.tsx`，应用壳与路由位于 `src/app/`。`AppShell` 提供 Workspace / Analysis / Collection / System / Utilities 五组导航；TanStack Router 按业务域懒加载页面；TanStack Query 管理服务端数据与后台任务轮询。
 
 - `src/api/`：Axios client、统一响应信封与错误模型、TypeScript API 合同；数组查询参数按重复 key 序列化。
 - `src/components/`：基于原生元素与 Radix primitives 的源码组件，以及按需注册模块的 ECharts 封装。
-- `src/features/`：按 dashboard、literatures、analysis、settings、organize、utilities、collection、video 划分页面与业务逻辑。
+- `src/features/`：按 dashboard、literatures、analysis、settings、organize、utilities、collection 划分页面与业务逻辑。
 - 文献表单使用 React Hook Form + Zod；论文分析 Markdown 经过本地安全解析后渲染；普通笔记仍使用文本输入，不引入富文本编辑器。
 - Tailwind CSS 4 由 Vite 插件接入，组件视觉规则保留在 `src/index.css`；生产构建按业务域拆包，`scripts/check-chunk-sizes.mjs` 强制活动 JavaScript chunk 不超过 500 KiB。
 
@@ -127,7 +126,6 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 | `/import`、`/backup` | 导入、备份与恢复 |
 | `/crawler/journals`、`/crawler/tasks`、`/crawler/settings` | 期刊与采集源配置、采集任务台、采集服务密钥 |
 | `/crawler/issues`、`/crawler/issues/<id>` | 原始期号库与详情、翻译及论文分析跳转 |
-| `/video-notes`、`/video-notes/tasks`、`/video-notes/tasks/<id>` | 视频任务创建、列表、状态、日志与产物 |
 | `/settings/models` | 模型档案、模型密钥与连接测试 |
 
 期刊与采集源页面不发起采集；采集任务台只使用该期刊已启用的源。issue 粒度源显示期号输入，year 粒度源只显示年份。采集期号库按期刊 → 年份 → 卷号 → 期号展示，`unknown` / `unassigned` 分别显示为“卷号未知”/“未分期”；统一文献层不保存这些内部标记。Scopus 详情可重采目标卷期，也可对存在 PII 的论文补采 ScienceDirect 全文。全文任务暂停时，期号详情与文献详情显示失败原因、公开文章页和继续操作；只有 `verification_required` 使用“验证完成后继续”，其他可恢复状态统一使用“继续下载”。外文期号翻译要求选择具体模型，翻译后可用“原文 / 中文译文”分段控件切换显示。采集服务密钥在独立采集设置页维护。
@@ -140,7 +138,6 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 - 上传文件：`backend/data/uploads/pdfs/`
 - 采集产物：`backend/data/artifacts/crawler/raw-json/<source>/<journal>/<year>/<volume>/<issue>.json`（`ARTIFACT_ROOT`）
 - 全文 Markdown 资产：`backend/data/artifacts/literature-text/<pdf_sha256>/<pipeline_version>/content.md`
-- 视频转笔记产物：`backend/data/artifacts/video-notes/<task_id>/`
 - 论文分析产物：`backend/data/artifacts/paper-analysis/<task_id>/analysis.md`
 
 原则：数据库是主存储；JSON/Markdown 是派生产物，用于重跑、审计、导出与复核。
@@ -175,7 +172,6 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 - 文献工作台的 tag/folder/note/backup 业务逻辑仍在路由层（未下沉 service）
 - 期刊筛选后端能力已就位（`/api/literatures?journal_id=`），前端筛选 UI 未接
 - 采集任务为同步执行（请求内跑完）；如需异步化需改 API 契约并配合前端轮询（core/tasks 执行器已可用）
-- 视频转笔记依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg），未收敛到项目内依赖
 - 全文自动采集目前支持已配置的国内 Magtech 期刊官网，以及可由 Scopus PII 定位且当前机构会话有权访问的 ScienceDirect 论文；NCPSSD、其他出版社和无订阅权限的页面不支持，也不绕过访问控制
 - ScienceDirect 普通 Edge 自动化仅支持 Windows 交互式桌面；锁屏、最小化 Edge 或下载期间操作鼠标与切换焦点可能中断当前论文
 - 全文任务由进程内 daemon 线程执行，应用重启不会自动恢复未完成任务
@@ -185,10 +181,10 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 
 ## 后台任务执行器
 
-`app/core/tasks.py` 提供统一 `TaskExecutor`（PE 阶段落地）：daemon 线程包装 + `submit(task_id, fn, on_error)` + `is_running/running_ids` 状态查询；异常经 `on_error(exc)` 回调由调用方落库。已接入：视频转笔记、全文下载和论文分析任务（均包装 app context，失败回调落库）。题录采集任务仍保持请求内同步执行，题录后的全文下载是独立异步阶段。
+`app/core/tasks.py` 提供统一 `TaskExecutor`（PE 阶段落地）：daemon 线程包装 + `submit(task_id, fn, on_error)` + `is_running/running_ids` 状态查询；异常经 `on_error(exc)` 回调由调用方落库。已接入全文下载和论文分析任务（均包装 app context，失败回调落库）。题录采集任务仍保持请求内同步执行，题录后的全文下载是独立异步阶段。
 
 ## 测试组织
 
-`backend/tests/` 按包归位：`core/`、`papers/`、`analysis/`、`collection/`、`video_notes/`。外部服务调用使用 mock / fixture 离线覆盖；当前全量套件 255 个测试。
+`backend/tests/` 按包归位：`core/`、`papers/`、`analysis/`、`collection/`。外部服务调用使用 mock / fixture 离线覆盖；当前全量套件 257 个测试。
 
-前端使用 Vitest 做纯逻辑测试，当前 6 个文件共 19 项；Playwright 项目级 E2E 覆盖路由、论文分析互斥选择与 Prompt 配置、Scopus 年度采集/卷期重采、全文入口、显式模型选择和移动端溢出，共 14 项。
+前端使用 Vitest 做纯逻辑测试，当前 6 个文件共 19 项；Playwright 项目级 E2E 覆盖路由、已移除功能的旧入口、论文分析互斥选择与 Prompt 配置、Scopus 年度采集/卷期重采、全文入口、显式模型选择和移动端溢出，共 14 项。

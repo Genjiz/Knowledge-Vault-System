@@ -52,12 +52,3 @@ export const RawIssueDetailPage = lazy(() =>
 export const RawIssueListPage = lazy(() =>
   import('@/features/collection/pages').then((module) => ({ default: module.RawIssueListPage })),
 )
-export const VideoNoteDetailPage = lazy(() =>
-  import('@/features/video/pages').then((module) => ({ default: module.VideoNoteDetailPage })),
-)
-export const VideoNoteHomePage = lazy(() =>
-  import('@/features/video/pages').then((module) => ({ default: module.VideoNoteHomePage })),
-)
-export const VideoNoteListPage = lazy(() =>
-  import('@/features/video/pages').then((module) => ({ default: module.VideoNoteListPage })),
-)

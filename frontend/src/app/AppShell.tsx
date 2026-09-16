@@ -11,7 +11,6 @@ import {
   Tags,
   Settings2,
   Upload,
-  Video,
   Workflow,
 } from 'lucide-react'
 
@@ -37,13 +36,6 @@ const groups = [
       ['/crawler/tasks', '采集任务台', Workflow],
       ['/crawler/issues', '采集期号库', Archive],
       ['/crawler/settings', '采集设置', Settings2],
-    ],
-  },
-  {
-    label: 'Media',
-    items: [
-      ['/video-notes', '视频转笔记', Video],
-      ['/video-notes/tasks', '视频任务列表', FileText],
     ],
   },
   {
