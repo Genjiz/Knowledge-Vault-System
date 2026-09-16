@@ -16,7 +16,7 @@ import sys
 class PaperDetailInfoExtractor:
     """论文详细信息提取器"""
     
-    def __init__(self, min_delay=1, max_delay=3):
+    def __init__(self, min_delay=1, max_delay=3, session=None):
         """
         初始化提取器
         
@@ -26,6 +26,8 @@ class PaperDetailInfoExtractor:
         """
         self.min_delay = min_delay
         self.max_delay = max_delay
+        self.session = session or requests.Session()
+        self.session.trust_env = False
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -239,7 +241,6 @@ class PaperDetailInfoExtractor:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
             'Content-Type': 'application/json;charset=UTF-8',
             'Referer': referer_url,
-            'Cookie': 'web_session=b363b507-914c-44d8-8318-637a16d87479; rememberMe=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'
         }
         
         print(f"   🔍 调用 API: {api_url}")
@@ -247,7 +248,7 @@ class PaperDetailInfoExtractor:
         
         try:
             self._random_delay()
-            response = requests.post(api_url, headers=headers, json=payload, timeout=15)
+            response = self.session.post(api_url, headers=headers, json=payload, timeout=15)
             
             print(f"   📋 响应状态码: {response.status_code}")
             

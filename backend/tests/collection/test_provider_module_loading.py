@@ -1,5 +1,7 @@
+import contextlib
+import io
+import importlib.util
 import sys
-import tempfile
 import tempfile
 import textwrap
 import unittest
@@ -72,6 +74,59 @@ class ProviderModuleLoadingTestCase(unittest.TestCase):
         factory = provider._load_default_factory()
 
         self.assertEqual(factory.__name__, "JournalPaperInfoCrawler")
+
+    def test_domestic_default_crawler_shares_injected_session(self):
+        import requests
+
+        from app.collection.sources.ncpssd import NcpssdSource
+
+        provider = NcpssdSource()
+        factory = provider._load_default_factory()
+        session = requests.Session()
+        session.trust_env = False
+
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            crawler = factory(session=session)
+
+        self.assertIs(crawler.issue_finder.session, session)
+        self.assertIs(crawler.title_extractor.session, session)
+        self.assertIs(crawler.detail_url_finder.session, session)
+        self.assertIs(crawler.abstract_extractor.session, session)
+
+    def test_domestic_abstract_api_does_not_send_static_cookie(self):
+        module_path = (
+            BACKEND_DIR
+            / "app"
+            / "collection"
+            / "legacy"
+            / "domestic"
+            / "5.paper_detail_info_extractor.py"
+        )
+        spec = importlib.util.spec_from_file_location("legacy_detail_info_extractor", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"result": True, "code": 200, "data": {}}
+
+        class FakeSession:
+            trust_env = True
+            headers = None
+
+            def post(self, url, **kwargs):
+                self.headers = kwargs.get("headers")
+                return FakeResponse()
+
+        session = FakeSession()
+        extractor = module.PaperDetailInfoExtractor(min_delay=0, max_delay=0, session=session)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            extractor._get_abstract_via_api("test-id", "https://www.ncpssd.cn/")
+
+        self.assertNotIn("Cookie", session.headers)
 
 
 if __name__ == "__main__":

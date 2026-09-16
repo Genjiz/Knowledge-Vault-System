@@ -4,10 +4,10 @@
 
 - 操作系统：Windows
 - 项目根目录：仓库根目录（含 `backend/`、`frontend/`、`docs/`）
-- 后端 Python 环境：仓库根目录 `.venv`，解释器为 `.venv\Scripts\python.exe`，不使用 conda
-- 前端环境：Node.js `^20.19.0` 或 `>=22.12.0`（Vite 8 要求），依赖位于 `frontend/node_modules`
+- 后端 Python 环境：Python `3.13.14`，仓库根目录 `.venv`，解释器为 `.venv\Scripts\python.exe`，不使用 conda
+- 前端环境：Node.js `24.17.0`、npm `11.13.0`，依赖位于 `frontend/node_modules`
 - 默认端口：后端 `5000`，前端 `3000`
-- 仓库托管于 GitHub 私有仓库，依赖目录与运行数据随仓库提交，便于跨机器直接使用
+- 仓库托管于 GitHub 私有仓库；运行数据随仓库提交，已安装依赖目录通过锁文件与 `setup.ps1` 跨机器重建
 - Gemini Key 读取优先级：环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → 根目录 `gemini_api_key.txt`
 - 本机浏览器为 Edge（Chromium 内核）；DrissionPage 默认按 Chrome 路径查找浏览器，需要指定浏览器路径时先与用户确认
 - 视频转笔记模块依赖系统级工具（conda 环境 `whisper`、`yt-dlp`、FFmpeg）；该模块计划改为项目内部依赖，调整前先与用户确认方案
@@ -39,13 +39,13 @@
 
 ## 4. 依赖管理（强制）
 
-- 环境独立可复现：项目环境不依赖系统公共 Python，Node.js 版本不随本机环境漂移；依赖全部收敛在项目内（`.venv`、`node_modules`）。
-- 后端依赖以 `backend/requirements.txt` 为唯一清单；新增、删除或升级依赖后必须同步更新该文件。
+- 环境独立可复现：Python、Node.js 与 npm 版本分别由 `.python-version`、`.node-version` 和 `frontend/package.json#engines` 固定；已安装依赖收敛在项目内（`.venv`、`frontend/node_modules`），但不提交到 Git。
+- 后端完整依赖树以 `backend/requirements.txt` 为唯一锁定清单，所有依赖必须使用 `==` 精确版本；新增、删除或升级依赖后必须在干净环境验证并同步更新该文件。
 - 安装命令必须通过项目环境执行：`.venv\Scripts\python.exe -m pip install ...`。
 - 依赖安装或升级完成后，必须执行相关导入验证或测试确认可用。
-- 前端依赖以 `frontend/package.json` 为唯一清单；改动后运行 `npm install` 并同步更新 `package-lock.json`。
+- 前端直接依赖以 `frontend/package.json` 为清单、完整依赖树以 `frontend/package-lock.json` 锁定；改动后运行 `npm install` 并同步更新锁文件，环境重建使用 `npm ci`。
 - 锁文件唯一：`package-lock.json` 是唯一的 Node.js 锁文件；发现 `yarn.lock`、`pnpm-lock.yaml` 等其他锁文件时先询问用户，不得擅自删除或重建。
-- `.venv/` 与 `frontend/node_modules/` 随仓库提交。`.venv` 内含本机绝对路径，跨机器失效时以 `requirements.txt` 重建；`node_modules` 异常时以 `npm install` 重建。
+- `.venv/` 与 `frontend/node_modules/` 必须由 Git 忽略；新机器或依赖异常时从根目录运行 `setup.ps1` 重建，不得提交其中的已安装文件。
 - 不得未经用户确认引入新的包管理器或环境体系（如 conda、uv、poetry、pnpm、yarn）。
 - 不得提交再生成产物：`__pycache__/`、`*.pyc`、`frontend/dist/` 等。
 

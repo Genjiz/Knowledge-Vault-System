@@ -196,6 +196,25 @@ class MagtechSourceContractTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             MagtechSource()
 
+    def test_default_session_forces_direct_connection(self):
+        from app.collection.sources.magtech import MagtechSource
+
+        source = MagtechSource(base_url=BASE_URL)
+
+        self.assertIsInstance(source._session, requests.Session)
+        self.assertFalse(source._session.trust_env)
+
+    def test_injected_session_also_forces_direct_connection(self):
+        from app.collection.sources.magtech import MagtechSource
+
+        session = requests.Session()
+        session.trust_env = True
+
+        source = MagtechSource(base_url=BASE_URL, session=session)
+
+        self.assertIs(source._session, session)
+        self.assertFalse(session.trust_env)
+
     def test_list_issues_returns_sorted_issues(self):
         session = build_issue_session()
         source = self._make_source(session)

@@ -170,17 +170,17 @@ class MagtechSource(SourceAdapter):
         if not base_url:
             raise ValueError("MagtechSource 需要 base_url 配置")
         self.base_url = str(base_url).rstrip("/")
-        self._session = session
+        self._session = session or requests.Session()
+        self._session.trust_env = False
         self._request_interval = max(0.0, float(request_interval))
         self._timeout = timeout
         self._max_attempts = max(1, int(max_attempts))
 
     def _request(self, url):
-        session = self._session or requests
         last_error = None
         for attempt in range(1, self._max_attempts + 1):
             try:
-                response = session.get(url, timeout=self._timeout, headers=DEFAULT_HEADERS)
+                response = self._session.get(url, timeout=self._timeout, headers=DEFAULT_HEADERS)
             except requests.RequestException as exc:
                 last_error = exc
                 if attempt >= self._max_attempts:

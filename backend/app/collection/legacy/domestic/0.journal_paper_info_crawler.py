@@ -5,13 +5,16 @@
 
 import sys
 import os
+import requests
 
 class JournalPaperInfoCrawler:
     """期刊论文信息爬虫 - 完整的论文抓取流程"""
     
-    def __init__(self):
+    def __init__(self, session=None):
         """初始化所有组件"""
         print("🚀 初始化期刊论文信息爬虫...")
+        self.session = session or requests.Session()
+        self.session.trust_env = False
         
         # 动态导入各个组件
         try:
@@ -36,10 +39,14 @@ class JournalPaperInfoCrawler:
             module_5 = import_module_by_path('paper_detail_info_extractor', os.path.join(current_dir, '5.paper_detail_info_extractor.py'))
             
             self.journal_finder = module_1.JournalUrlFinder()
-            self.issue_finder = module_2.IssueUrlFinder(min_delay=1, max_delay=3)
-            self.title_extractor = module_3.PaperTitleExtractor()
-            self.detail_url_finder = module_4.PaperDetailUrlFinder(min_delay=1, max_delay=3)
-            self.abstract_extractor = module_5.PaperDetailInfoExtractor(min_delay=1, max_delay=3)
+            self.issue_finder = module_2.IssueUrlFinder(min_delay=1, max_delay=3, session=self.session)
+            self.title_extractor = module_3.PaperTitleExtractor(session=self.session)
+            self.detail_url_finder = module_4.PaperDetailUrlFinder(
+                min_delay=1, max_delay=3, session=self.session
+            )
+            self.abstract_extractor = module_5.PaperDetailInfoExtractor(
+                min_delay=1, max_delay=3, session=self.session
+            )
             
             print("✅ 所有组件初始化完成")
         except ImportError as e:

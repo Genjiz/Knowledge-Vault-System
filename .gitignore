@@ -7,22 +7,20 @@
 
 .tmp/
 .pip-cache/
+.npm-cache/
 .crawler-browser-profile/
+.venv/
 
 # 桌面启动器运行时数据（端口记录、进程日志）
 .runtime/
 
-# 依赖目录与运行数据按用户确认随私有仓库提交（.venv、frontend/node_modules、backend/data/）
-# .venv 与 node_modules 的实际首次入库将在用户确认后单独执行（大提交）
+# 已安装依赖由锁文件和 setup.ps1 重建，不提交到 Git
+frontend/node_modules/
 
 frontend/dist/
 frontend/.playwright-cli/
 frontend/playwright-report/
 frontend/test-results/
-frontend/node_modules/.tmp/
-frontend/node_modules/.vite/
-frontend/node_modules/.vite-temp/
-frontend/node_modules/.vitest/
 
 # 密钥类文件绝对不提交
 .env

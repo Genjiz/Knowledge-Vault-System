@@ -8,13 +8,15 @@
    作用：对外简介、快速启动、仓库定位
 2. `docs/current-architecture.md`
    作用：已实现并验证的当前架构、数据与产物位置、当前限制
-3. `docs/specifications/target-implementation-spec.md`
+3. `docs/proxy-and-network.md`
+   作用：代理机制、当前请求分流、配置加载边界与排查方法
+4. `docs/specifications/target-implementation-spec.md`
    作用：用户已确认的目标态（近期目标、中期方向、负面约束）
-4. `docs/decisions/project-decisions.md`
+5. `docs/decisions/project-decisions.md`
    作用：长期有效的重要决策及理由
-5. `docs/lessons/engineering-lessons.md`
+6. `docs/lessons/engineering-lessons.md`
    作用：已验证、可复用的工程经验
-6. `docs/plans/`
+7. `docs/plans/`
    作用：设计与实施计划（`YYYY-MM-DD-<topic>.md`）
 
 ## 各文档怎么更新
@@ -23,6 +25,8 @@
   更新时机：对外定位、启动方式、核心能力发生变化时
 - `docs/current-architecture.md`
   更新时机：已实现的结构、数据流、路径规则、限制发生变化时；只写已验证事实
+- `docs/proxy-and-network.md`
+  更新时机：代理变量、客户端分流、浏览器或隧道路由策略发生变化时
 - `docs/specifications/target-implementation-spec.md`
   更新时机：用户确认新的目标态或推翻既有目标态时
 - `docs/decisions/project-decisions.md`
@@ -42,11 +46,10 @@
 │  ├─ specifications/
 │  ├─ decisions/
 │  ├─ lessons/
-│  └─ plans/
+│  ├─ plans/
+│  └─ proxy-and-network.md
 ├─ desktop.py
 ├─ desktop.bat
-├─ start.bat
-├─ stop.bat
 ├─ README.md
 └─ AGENTS.md
 ```

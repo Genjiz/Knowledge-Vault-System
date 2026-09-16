@@ -36,9 +36,9 @@
 
 ## D-005 Gemini 代理配置走根目录 .env
 
-- 状态：已生效
+- 状态：已被 D-030 修订
 - 日期：2026-04-02
-- 内容：Gemini 运行时从仓库根目录 `.env` 读取 `GEMINI_PROXY_URL`（也支持 `HTTPS_PROXY` / `HTTP_PROXY`），供翻译、期刊总结和视频笔记统一走本地代理；Key 读取优先级为环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → `gemini_api_key.txt`。
+- 内容：Gemini 运行时从仓库根目录 `.env` 读取旧的模型专用代理变量或标准代理变量，供翻译、期刊总结和视频笔记统一走本地代理；Key 读取优先级为环境变量 `GEMINI_API_KEY` → `backend/gemini_api_key.txt` → `gemini_api_key.txt`。
 - 理由：本机无法直连 `generativelanguage.googleapis.com` 时需要代理；Key 与代理配置不进入版本库。
 - 影响：`.env` 为本机私有配置，`.env.example` 为其可提交模板。
 
@@ -60,7 +60,7 @@
 
 ## D-008 版本控制策略：私有仓库，依赖与数据入库
 
-- 状态：已生效
+- 状态：依赖目录部分已被 D-028 修订；运行数据与私有仓库策略仍生效
 - 日期：2026-08-30
 - 内容：仓库托管于 GitHub 私有仓库；`.venv/`、`frontend/node_modules/` 与全部运行数据（数据库、上传文件、任务产物）随仓库提交；`.crawler-browser-profile/` 与密钥类文件（`.env`、`gemini_api_key.txt`）不提交；SQLite 数据库按里程碑提交。
 - 理由：跨机器直接可用，环境与数据不依赖本机状态；密钥安全是绝对底线；避免二进制快照膨胀。
@@ -108,7 +108,7 @@
 
 ## D-014 桌面托盘启动器与端口统一编排
 
-- 状态：已生效
+- 状态：备用批处理入口部分已被 D-029 修订；其余内容仍生效
 - 日期：2026-09-02
 - 内容：项目启动方式为根目录 `desktop.py`（经 `desktop.bat` 用 pythonw 无窗口拉起）：托盘图标常驻，后台管理前后端进程，右键退出按进程树回收；端口决策收口到启动器，经环境变量 `KV_BACKEND_PORT` / `KV_FRONTEND_PORT` 下发，策略为首选端口 + 自动顺延；`start.bat` / `stop.bat` 保留为无依赖备用入口。前后端仍走 HTTP 通信，未引入 Tauri / Electron / pywebview（用户不需要独立窗口）。
 - 理由：用户痛点是三个常驻终端窗口与关闭不便，不是缺少桌面壳；零端口方案需重写整套通信层，成本远超收益；端口若三处各自写死，冲突时会出现「页面能开接口全挂」「启动成功打不开」等静默故障。
@@ -217,3 +217,27 @@
 - 内容：外文 PDF 首期只支持 ScienceDirect。Scopus 继续作为题录来源，独立全文提供器按 raw_paper 的 PII 解析 ScienceDirect，不把所有 Scopus 论文视为 Elsevier 全文。ScienceDirect 复用用户日常 Edge `Default` profile，通过 Windows UI Automation 定位控件并发送系统级键鼠输入，不使用独立自动化 profile，也不把浏览器 Cookie 或签名链接转入 HTTP 客户端。人机 challenge、网络出口限制或普通 Edge 桌面暂时不可用会暂停整批任务为 `waiting_user`，保存稳定失败码和公开文章 URL，用户处理后从当前条目恢复；程序不求解验证码、不绕过登录、订阅或访问控制。
 - 理由：同一题录库覆盖多个出版社，题录来源不能决定全文站点；网页下载的登录态、风控和订阅失败具有不同恢复动作，普通异常重试会扩大封禁风险并丢失任务进度。
 - 影响：`collection/fulltext` 提供器层使用普通 Edge 桌面网关完成 ScienceDirect 下载，要求 Windows 桌面已解锁且 Edge 可见，并在串行任务期间短暂占用前台焦点和鼠标；`failure_code` / `action_url`、`waiting_user` 状态和全文任务恢复 API 保持不变。Magtech 使用同一任务编排，现有 PDF 覆盖保护保持不变。
+
+## D-028 已安装依赖改为锁文件重建
+
+- 状态：已生效
+- 日期：2026-09-16
+- 内容：`.venv/` 与 `frontend/node_modules/` 改为本机生成并由 Git 忽略；Python `3.13.14`、Node.js `24.17.0`、npm `11.13.0` 显式固定，后端完整依赖树在 `backend/requirements.txt` 中精确锁定，前端使用 `package-lock.json`；根目录 `setup.ps1` 统一执行依赖安装、配置初始化、数据库升级和基础验证。运行数据仍按原私有仓库策略管理。
+- 理由：虚拟环境包含本机绝对路径，Python wheel 与 Node 原生模块依赖操作系统、架构和运行时；提交安装目录会扩大仓库与历史，却不能保证换机可执行。锁文件重建能保留可复现目标并降低版本控制噪声。
+- 影响：新机器需先安装声明的 Python、Node.js 和 npm 版本，再运行一次 `setup.ps1`；依赖变更必须同步更新锁定清单并验证，不能通过提交安装目录传播。
+
+## D-029 桌面托盘作为唯一用户启动入口
+
+- 状态：已生效
+- 日期：2026-09-16
+- 内容：删除根目录 `start.bat` 与 `stop.bat`；用户统一通过 `desktop.bat` 启动，并通过托盘菜单重启或退出服务。开发调试继续使用 README 中的前后端独立启动命令。
+- 理由：备用脚本按固定端口查杀进程，无法可靠处理桌面启动器的动态端口，并可能误杀占用默认端口的无关进程；保留两套生命周期入口也容易造成托盘状态与服务进程不一致。
+- 影响：根目录不再提供固定端口批处理启停方式；桌面启动器负责完整服务生命周期，开发者需要可见日志时分别运行后端与前端开发命令。
+
+## D-030 标准代理变量与按数据源分流
+
+- 状态：已生效
+- 日期：2026-09-16
+- 内容：移除旧的模型专用代理变量，根目录 `.env` 统一使用 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`。Gemini 从标准变量读取代理并显式传给 SDK；OpenAI Compatible 保持 HTTPX 默认环境代理行为；Scopus、NCPSSD 与 Magtech 使用 `trust_env=False` 的专用 Requests Session，在应用层强制直连。浏览器继续使用 Windows/浏览器/TUN 路由，桌面健康检查继续使用空 `ProxyHandler`。
+- 理由：模型服务通常需要本地代理，机构 API 与国内站点则需要校园网、aTrust 或国内出口；统一变量能兼容第三方工具，明确直连 Session 能避免 Windows 系统代理和父进程环境意外改变机构请求出口。
+- 影响：本机代理端口只在不提交的 `.env` 配置；`.env.example` 保留空值结构。NCPSSD 各 legacy 组件共享入口直连 Session；实测摘要接口不带 Cookie 仍返回完整数据，因此删除源码静态 Cookie。具体行为与故障排查见 `docs/proxy-and-network.md`。

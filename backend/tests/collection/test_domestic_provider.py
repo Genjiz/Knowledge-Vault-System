@@ -1,6 +1,5 @@
 import sys
 import tempfile
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +9,30 @@ if str(BACKEND_DIR) not in sys.path:
 
 
 class DomesticProviderContractTestCase(unittest.TestCase):
+    def test_default_session_is_direct_and_passed_to_crawler(self):
+        from app.collection.sources.ncpssd import NcpssdSource
+
+        class FakeCrawler:
+            received_session = None
+
+            def __init__(self, session=None):
+                type(self).received_session = session
+
+            def crawl_journal_papers(self, journal_name, year, issue):
+                return {
+                    "success": True,
+                    "journal_name": journal_name,
+                    "year": year,
+                    "issue": issue,
+                    "papers": [],
+                }
+
+        provider = NcpssdSource(crawler_factory=FakeCrawler)
+        provider.fetch_issue("测试期刊", 2024, 3)
+
+        self.assertFalse(provider._session.trust_env)
+        self.assertIs(FakeCrawler.received_session, provider._session)
+
     def test_domestic_provider_returns_structured_issue_payload(self):
         from app.collection.sources.ncpssd import NcpssdSource
 
@@ -70,9 +93,8 @@ class DomesticProviderContractTestCase(unittest.TestCase):
 
         provider = NcpssdSource(crawler_factory=lambda: None, enable_network_precheck=True)
 
-        with patch(
-            "app.collection.sources.ncpssd.requests.get",
-            side_effect=requests.RequestException("network down"),
+        with patch.object(
+            provider._session, "get", side_effect=requests.RequestException("network down")
         ):
             with self.assertRaises(ProviderError) as ctx:
                 provider.fetch_issue("测试期刊", 2024, "3")

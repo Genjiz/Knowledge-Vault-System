@@ -53,7 +53,7 @@ def load_gemini_api_key():
 
 def load_gemini_proxy_url():
     load_runtime_env()
-    for env_name in ("GEMINI_PROXY_URL", "HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
+    for env_name in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
         value = os.environ.get(env_name)
         if value:
             return value.strip()

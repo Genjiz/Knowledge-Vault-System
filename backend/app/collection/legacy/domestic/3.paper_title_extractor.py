@@ -8,7 +8,9 @@ from datetime import datetime
 class PaperTitleExtractor:
     """论文标题提取器 - 从URL获取论文标题信息"""
     
-    def __init__(self):
+    def __init__(self, session=None):
+        self.session = session or requests.Session()
+        self.session.trust_env = False
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -105,7 +107,7 @@ class PaperTitleExtractor:
         try:
             print(f"正在获取论文信息: {url}")
             
-            response = requests.get(url, headers=self.headers, timeout=15)
+            response = self.session.get(url, headers=self.headers, timeout=15)
             response.encoding = 'utf-8'
             
             if response.status_code != 200:

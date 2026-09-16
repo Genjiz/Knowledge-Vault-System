@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import requests
+
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -107,9 +109,9 @@ class LegacySourceTestConnectionTestCase(unittest.TestCase):
     def test_ncpssd_reports_cached_journal(self):
         from app.collection.sources.ncpssd import NcpssdSource
 
-        with mock.patch("app.collection.sources.ncpssd.requests") as fake_requests:
-            fake_requests.get.return_value = self._ok_response()
-            result = NcpssdSource().test_connection(journal_name="情报学报")
+        provider = NcpssdSource()
+        with mock.patch.object(provider._session, "get", return_value=self._ok_response()):
+            result = provider.test_connection(journal_name="情报学报")
 
         self.assertEqual(result["status"], "ok")
         self.assertIn("情报学报", result["message"])
@@ -117,9 +119,9 @@ class LegacySourceTestConnectionTestCase(unittest.TestCase):
     def test_ncpssd_warns_when_journal_not_cached(self):
         from app.collection.sources.ncpssd import NcpssdSource
 
-        with mock.patch("app.collection.sources.ncpssd.requests") as fake_requests:
-            fake_requests.get.return_value = self._ok_response()
-            result = NcpssdSource().test_connection(journal_name="某未收录期刊")
+        provider = NcpssdSource()
+        with mock.patch.object(provider._session, "get", return_value=self._ok_response()):
+            result = provider.test_connection(journal_name="某未收录期刊")
 
         self.assertEqual(result["status"], "warn")
         self.assertIn("未收录", result["message"])
@@ -127,10 +129,11 @@ class LegacySourceTestConnectionTestCase(unittest.TestCase):
     def test_ncpssd_reports_network_failure(self):
         from app.collection.sources.ncpssd import NcpssdSource
 
-        with mock.patch("app.collection.sources.ncpssd.requests") as fake_requests:
-            fake_requests.RequestException = Exception
-            fake_requests.get.side_effect = fake_requests.RequestException("timeout")
-            result = NcpssdSource().test_connection(journal_name="情报学报")
+        provider = NcpssdSource()
+        with mock.patch.object(
+            provider._session, "get", side_effect=requests.RequestException("timeout")
+        ):
+            result = provider.test_connection(journal_name="情报学报")
 
         self.assertEqual(result["status"], "failed")
 

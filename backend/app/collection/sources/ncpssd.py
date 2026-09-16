@@ -1,6 +1,7 @@
 import contextlib
 import io
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 import sys
@@ -29,9 +30,11 @@ class NcpssdSource(SourceAdapter):
     # 期刊定位参数由 legacy/domestic/journal_url_cache.json 缓存解析，无需用户配置
     config_fields = []
 
-    def __init__(self, crawler_factory=None, enable_network_precheck=None, precheck_timeout=8):
+    def __init__(self, crawler_factory=None, enable_network_precheck=None, precheck_timeout=8, session=None):
         self._crawler_factory = crawler_factory
         self._default_script_path = None
+        self._session = session or requests.Session()
+        self._session.trust_env = False
         self._enable_network_precheck = (
             crawler_factory is None if enable_network_precheck is None else bool(enable_network_precheck)
         )
@@ -60,11 +63,22 @@ class NcpssdSource(SourceAdapter):
     def _get_factory(self):
         return self._crawler_factory or self._load_default_factory()
 
+    def _create_crawler(self):
+        factory = self._get_factory()
+        parameters = inspect.signature(factory).parameters.values()
+        accepts_session = any(
+            parameter.name == "session" or parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        )
+        if accepts_session:
+            return factory(session=self._session)
+        return factory()
+
     def _network_precheck(self):
         if not self._enable_network_precheck:
             return
         try:
-            response = requests.get(
+            response = self._session.get(
                 self._precheck_url,
                 timeout=self._precheck_timeout,
                 headers={"User-Agent": "Mozilla/5.0"},
@@ -116,7 +130,7 @@ class NcpssdSource(SourceAdapter):
     def fetch_issue(self, journal_name, year, issue):
         self._network_precheck()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            crawler = self._get_factory()()
+            crawler = self._create_crawler()
             result = crawler.crawl_journal_papers(journal_name, year, issue)
         if not result.get("success"):
             raise ProviderError(result.get("error_message") or "Domestic crawl failed")

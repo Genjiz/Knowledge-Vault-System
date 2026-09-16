@@ -15,7 +15,7 @@ class NoteGenerationService:
             return (
                 "Gemini connection timed out. "
                 "Check whether this machine can reach generativelanguage.googleapis.com:443 "
-                "and configure GEMINI_PROXY_URL or HTTPS_PROXY/HTTP_PROXY if a proxy is required."
+                "and configure HTTPS_PROXY/HTTP_PROXY if a proxy is required."
             )
         return message
 

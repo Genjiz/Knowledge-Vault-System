@@ -15,7 +15,7 @@ from datetime import datetime
 class PaperDetailUrlFinder:
     """论文详情页URL查找器"""
     
-    def __init__(self, min_delay=1, max_delay=3):
+    def __init__(self, min_delay=1, max_delay=3, session=None):
         """
         初始化查找器
         
@@ -25,6 +25,8 @@ class PaperDetailUrlFinder:
         """
         self.min_delay = min_delay
         self.max_delay = max_delay
+        self.session = session or requests.Session()
+        self.session.trust_env = False
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -85,7 +87,7 @@ class PaperDetailUrlFinder:
             
             # 获取期号页面内容
             self._random_delay()
-            response = requests.get(issue_url, headers=self.headers, timeout=15)
+            response = self.session.get(issue_url, headers=self.headers, timeout=15)
             response.encoding = 'utf-8'
             
             if response.status_code != 200:

@@ -37,30 +37,31 @@ Knowledge Vault 不再只定位为“文献管理系统”，而是一个面向�
 ├─ docs/
 ├─ desktop.py
 ├─ desktop.bat
-├─ start.bat
-├─ stop.bat
 ├─ README.md
 └─ AGENTS.md
 ```
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 初始化环境
 
-前端要求 Node.js `^20.19.0` 或 `>=22.12.0`，使用 npm 与仓库内唯一锁文件 `frontend/package-lock.json`。
+Windows x64 环境要求 Python `3.13.14`、Node.js `24.17.0` 和 npm `11.13.0`。先退出正在运行的 Knowledge Vault 前后端进程，再在仓库根目录执行：
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe --version
-python -m pip --python .\.venv\Scripts\python.exe install -r .\backend\requirements.txt
-cd .\frontend
-npm install
-cd ..
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+脚本会创建或复用根目录 `.venv`、安装精确锁定的后端依赖、通过 `npm ci` 重建前端依赖、在缺少时由 `.env.example` 创建 `.env`、执行数据库迁移，并完成后端依赖检查和前端构建。`.venv/` 与 `frontend/node_modules/` 是本机生成目录，不由 Git 跟踪。
+
+如果 Python 未加入 `PATH` 且尚未创建 `.venv`，可显式指定解释器：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -PythonExecutable "C:\Path\To\Python313\python.exe"
 ```
 
 ### 2. 初始化数据库
 
-仓库随附 `backend/data/db/app.db`（含数据与迁移基线），可直接使用。全新环境（无数据库文件）时执行：
+`setup.ps1` 已自动把数据库升级到仓库当前迁移版本。仓库随附 `backend/data/db/app.db`（含数据与迁移基线）；需要单独修复或升级数据库时执行：
 
 ```powershell
 cd .\backend
@@ -83,13 +84,15 @@ ScienceDirect 全文补采使用当前 Windows 用户的普通 Edge `Default` pr
 3. 文件 `gemini_api_key.txt`
 
 推荐只保留 `backend/gemini_api_key.txt`，并确保该文件不提交到 Git。
-如果当前机器无法直连 `generativelanguage.googleapis.com:443`，可以在仓库根目录创建 `.env`，并配置：
+如果当前机器无法直连模型服务，可以在仓库根目录 `.env` 配置标准代理变量。以下端口是本机 Veee 示例，其他机器应填写代理客户端实际监听端口：
 
 ```env
-GEMINI_PROXY_URL=http://127.0.0.1:7890
+HTTP_PROXY=http://127.0.0.1:15236
+HTTPS_PROXY=http://127.0.0.1:15236
+NO_PROXY=localhost,127.0.0.1,::1
 ```
 
-也支持直接在 `.env` 中使用 `HTTPS_PROXY` 或 `HTTP_PROXY`。
+Gemini 和 OpenAI Compatible 模型使用这些标准变量；Scopus、NCPSSD 与 Magtech 在应用层固定直连。完整的分流规则、Windows 系统代理与 TUN/aTrust 区别见 [`docs/proxy-and-network.md`](docs/proxy-and-network.md)。
 
 国外期刊题录可使用 Scopus API。在「期刊与采集源」中填写期刊 ISSN 并启用 `Scopus API`，再到「Collection → 采集设置」保存 Elsevier Research Products API Key。密钥写入根目录 `.env` 的 `ELSEVIER_API_KEY`，不会进入数据库或 API 响应；Scopus 请求固定直连，不读取系统代理，COMPLETE 权益需要校园网或 aTrust 对应的出口 IP。
 
@@ -105,20 +108,13 @@ desktop.bat
 
 双击后不会出现任何终端窗口：前后端在后台启动，托盘图标常驻右下角（首次运行自动安装启动器依赖 pystray / Pillow）。就绪后自动用默认浏览器打开界面；关闭浏览器页面不影响服务，右键托盘图标可选择「打开界面 / 重启服务 / 退出」，退出会按进程树彻底停止前后端。
 
-备用的手工方式（会弹出终端窗口）：
-
-```bat
-start.bat
-stop.bat
-```
-
 默认地址：
 
 - 前端：`http://127.0.0.1:3000`
 - 后端：`http://127.0.0.1:5000`
 - 健康检查：`http://localhost:5000/api/health`
 
-端口被其他程序占用时自动顺延（5000→5001…、3000→3001…），实际端口以托盘菜单显示为准；手工方式下后端会把实际端口打印到终端。桌面启动器单独使用 `KV_BACKEND_PORT` / `KV_FRONTEND_PORT` 环境变量注入端口。
+端口被其他程序占用时自动顺延（5000→5001…、3000→3001…），实际端口以托盘菜单显示为准。桌面启动器使用 `KV_BACKEND_PORT` / `KV_FRONTEND_PORT` 环境变量注入端口。
 
 ### 5. 常用开发命令
 
@@ -172,6 +168,7 @@ npm run format:check
 - 决策记录：[`docs/decisions/project-decisions.md`](docs/decisions/project-decisions.md)
 - 工程经验：[`docs/lessons/engineering-lessons.md`](docs/lessons/engineering-lessons.md)
 - 文档导航：[`docs/documentation-map.md`](docs/documentation-map.md)
+- 代理与网络：[`docs/proxy-and-network.md`](docs/proxy-and-network.md)
 - 设计与实施计划：[`docs/plans/`](docs/plans/)
 
 ## 开发约定

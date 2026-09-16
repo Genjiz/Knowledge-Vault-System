@@ -8,7 +8,8 @@
 - 后端：Flask + SQLAlchemy + SQLite
 - 采集与 AI：requests + beautifulsoup4 + DrissionPage + pywinauto + PyMuPDF4LLM + Docling + google-genai + openai
 - 桌面启动器：pystray + Pillow（根目录 `desktop.py`，仅 Windows 使用）
-- 后端环境：仓库根目录 `.venv`（Python 3.11+）；前端使用 Node.js `^20.19.0` 或 `>=22.12.0`，依赖经 npm 安装
+- 开发环境：Windows x64；后端使用 Python `3.13.14` 与仓库根目录 `.venv`，前端使用 Node.js `24.17.0`、npm `11.13.0` 与 `frontend/node_modules`
+- 环境重建：`.python-version`、`.node-version`、精确锁定的 `backend/requirements.txt` 和 `frontend/package-lock.json` 定义环境；根目录 `setup.ps1` 负责依赖安装、`.env` 初始化、数据库升级和基础验证；已安装依赖目录不进入 Git
 
 ## 后端结构
 
@@ -77,7 +78,7 @@
 
 系统不再内置或自动导入期刊清单；新数据库的期刊为空，由「期刊与采集源」页面维护。期刊区域是用户维护的显式字段，采集源按区域与期刊匹配，配置接口会拒绝区域不符的源。
 
-Scopus 源按 `ISSN(<journal.issn>) AND PUBYEAR = <year>` 使用 COMPLETE 视图分页采集，每页 25 条并按 `coverDate` 排序；一次年度任务按论文的真实 volume + issue 拆成多个 raw_issue，同一期号跨卷保持独立。定向重采仍查询整年再精确过滤目标卷期，过滤为空时不覆盖旧批次。客户端使用 `requests.Session(trust_env=False)` 直连，不读取系统代理；429/5xx 有限重试，401/403 提示校内出口 IP 权益。EID、PII、DOI 用于源引用与去重，DOI 参与统一文献匹配。正式 IP&M 2026 数据已拆为 11 个卷期批次，并保持 601 个 raw_paper ID 与 601 条来源关联。
+Scopus 源按 `ISSN(<journal.issn>) AND PUBYEAR = <year>` 使用 COMPLETE 视图分页采集，每页 25 条并按 `coverDate` 排序；一次年度任务按论文的真实 volume + issue 拆成多个 raw_issue，同一期号跨卷保持独立。定向重采仍查询整年再精确过滤目标卷期，过滤为空时不覆盖旧批次。客户端使用 `requests.Session(trust_env=False)`，不读取代理环境变量或 Windows 自动代理；429/5xx 有限重试，401/403 提示校内出口 IP 权益。EID、PII、DOI 用于源引用与去重，DOI 参与统一文献匹配。正式 IP&M 2026 数据已拆为 11 个卷期批次，并保持 601 个 raw_paper ID 与 601 条来源关联。
 
 ## 模型平台与论文分析
 
@@ -154,10 +155,17 @@ IP&M 2026 年第 `2PA` 期（raw_issue 12）的 12 个带符号 PII 已完成真
 - 模型 API Key 映射位于根目录 `.env` 的 `LLM_API_KEYS_JSON`（不提交）；数据库只存非敏感模型配置。
 - Elsevier Research Products API Key 位于根目录 `.env` 的 `ELSEVIER_API_KEY`（不提交）；设置页和接口只显示是否已配置。
 
+## 代理与网络路由
+
+- 根目录 `.env` 使用标准 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`，不再使用模型专用代理变量。Gemini 按 `HTTPS_PROXY` → `HTTP_PROXY` 读取后显式传给 SDK；OpenAI Compatible 使用 HTTPX 默认环境代理行为。
+- Scopus、NCPSSD 与 Magtech 使用 `requests.Session(trust_env=False)`，不读取应用层代理环境或 Windows 自动代理。NCPSSD 的入口预检及四个 legacy 网络组件共享同一个直连 Session；已验证其摘要接口无 Cookie 仍返回完整数据，源码不再保存静态 Cookie。
+- Elsevier/ScienceDirect 浏览器流量由 Edge/Chromium、Windows 系统代理、浏览器扩展及 TUN/aTrust 决定；Python 代理变量不会直接配置浏览器。
+- `desktop.py` 不加载 `.env`；它复制父进程环境并增加端口变量。后端运行时加载 `.env`，且已有同名进程环境变量优先。桌面健康检查显式使用空 `ProxyHandler`，保证回环探测不经过应用层代理。
+- TUN、VPN 和 aTrust 属系统路由层；`trust_env=False` 不能绕过它们。完整矩阵与排查方法见 `docs/proxy-and-network.md`。
+
 ## 启动方式与端口管理
 
 - 推荐入口：根目录 `desktop.bat` → 无窗口拉起 `desktop.py`（pythonw）。启动器负责：单实例检测（`.runtime/ports.json` + 健康检查）、端口分配、后台拉起前后端（`CREATE_NO_WINDOW`，日志落 `.runtime/logs/`）、轮询 `/api/health` 就绪后用系统默认浏览器打开界面、托盘常驻（打开界面/重启服务/退出），退出按进程树 `taskkill /f /t` 回收。
-- 备用入口：`start.bat` / `stop.bat`（终端窗口方式，按固定端口 kill）。
 - 端口规则：决策收口在启动器，经环境变量下发——`KV_BACKEND_PORT` → `backend/run.py`，`KV_BACKEND_PORT`/`KV_FRONTEND_PORT` → `frontend/vite.config.ts`。策略为首选端口（5000/3000）+ 自动顺延；显式注入的端口被占时报错，未注入时自动顺延。`app/core/ports.py` 是端口分配的唯一实现。
 - 后端默认关闭 Flask 调试 reloader（`FLASK_DEBUG=1` 可开启）；Vite 显式绑定 `127.0.0.1`，启动器注入端口时启用 `strictPort`。
 - 端口记录与进程日志位于 `.runtime/`（不提交），退出后删除端口记录文件。

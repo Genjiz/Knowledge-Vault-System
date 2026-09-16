@@ -15,7 +15,6 @@ class GeminiRuntimeTestCase(unittest.TestCase):
     def setUp(self):
         self.env_names = (
             "GEMINI_API_KEY",
-            "GEMINI_PROXY_URL",
             "HTTPS_PROXY",
             "HTTP_PROXY",
             "https_proxy",
@@ -66,7 +65,7 @@ class GeminiRuntimeTestCase(unittest.TestCase):
             with self.assertRaises(LLMError):
                 gemini.load_gemini_api_key()
 
-    def test_create_gemini_client_uses_proxy_from_dotenv(self):
+    def test_create_gemini_client_uses_standard_proxy_from_dotenv(self):
         from app.core.llm import gemini
 
         class FakeHttpOptions:
@@ -94,7 +93,8 @@ class GeminiRuntimeTestCase(unittest.TestCase):
         root = self.temp_root / "proxy"
         root.mkdir(parents=True, exist_ok=True)
         (root / ".env").write_text(
-            "GEMINI_API_KEY=dotenv-test-key\nGEMINI_PROXY_URL=http://127.0.0.1:7890\n",
+            "GEMINI_API_KEY=dotenv-test-key\n"
+            "HTTPS_PROXY=http://127.0.0.1:15236\n",
             encoding="utf-8",
         )
 
@@ -106,8 +106,8 @@ class GeminiRuntimeTestCase(unittest.TestCase):
 
         self.assertEqual(result["api_key"], "dotenv-test-key")
         http_options = result["http_options"]
-        self.assertEqual(http_options.kwargs["clientArgs"]["proxy"], "http://127.0.0.1:7890")
-        self.assertEqual(http_options.kwargs["asyncClientArgs"]["proxy"], "http://127.0.0.1:7890")
+        self.assertEqual(http_options.kwargs["clientArgs"]["proxy"], "http://127.0.0.1:15236")
+        self.assertEqual(http_options.kwargs["asyncClientArgs"]["proxy"], "http://127.0.0.1:15236")
         self.assertFalse(http_options.kwargs["clientArgs"]["trust_env"])
         self.assertFalse(http_options.kwargs["asyncClientArgs"]["trust_env"])
 

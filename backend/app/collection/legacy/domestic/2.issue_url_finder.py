@@ -11,7 +11,7 @@ from urllib.parse import urljoin, urlparse, parse_qs
 class IssueUrlFinder:
     """期号URL查找器 - 完全基于页面内容获取期号URL，不依赖任何预设模式"""
     
-    def __init__(self, min_delay=1, max_delay=3):
+    def __init__(self, min_delay=1, max_delay=3, session=None):
         """初始化爬虫
         
         Args:
@@ -19,7 +19,8 @@ class IssueUrlFinder:
             max_delay: 最大请求间隔（秒）
         """
         self.base_url = "https://www.ncpssd.cn"
-        self.session = requests.Session()
+        self.session = session or requests.Session()
+        self.session.trust_env = False
         
         # 反爬虫防护：请求频率控制
         self.min_delay = min_delay
